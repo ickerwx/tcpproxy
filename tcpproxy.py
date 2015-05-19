@@ -118,11 +118,12 @@ def receive_from(s, timeout):
     return b
 
 
-def handle_data(data, modules, dont_chain):
+def handle_data(data, modules, dont_chain, incoming=False):
     # execute each active module on the data. If dont_chain is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
+        print ("> > > > in: " if incoming else "< < < < out: ") + m.name
         if dont_chain:
             m.execute(data)
         else:
@@ -145,7 +146,8 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         in_data = receive_from(remote_socket, args.timeout)
         if len(in_data):
             if in_modules is not None:
-                in_data = handle_data(in_data, in_modules, args.chain_modules)
+                in_data = handle_data(in_data, in_modules,
+                                      args.chain_modules, True)
             local_socket.send(in_data)
 
     # This loop ends when no more data is received on either the local or the
@@ -162,7 +164,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         if len(in_data):
             if in_modules is not None:
                 in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules)
+                                      args.no_chain_modules, True)
             local_socket.send(in_data)
 
         if not len(in_data) or not len(out_data):

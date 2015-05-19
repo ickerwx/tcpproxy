@@ -70,6 +70,12 @@ if __name__ == '__main__':
 
 Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one paramter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
 
+### Playing with Java objects
+The deserializer module implements a way to alter serialized java objects on the fly. To use it, change the CLASSPATH env variable to make sure the custom classes are available to your code.
+```
+CLASSPATH=$CLASSPATH:/home/user/test/Someclass.jar jython27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om hexdump,deserializer,hexdump
+```
+
 ## TODO
 - implement a way to pass parameters to modules
 - implement logging (pre-/post modification)
