@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import socket
+import ssl
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -64,6 +65,9 @@ def parse_args():
 
     parser.add_argument('-l', '--list', dest='list', action='store_true',
                         help='list available modules')
+
+    parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
+                        default=False, help='use SSL, certificate is mitm.pem')
 
     return parser.parse_args()
 
@@ -136,6 +140,8 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # host and the remote host, while letting modules work on the date before
     # passing it on.
     remote_socket = socket.socket()
+    if args.use_ssl:
+        remote_socket = ssl.wrap_socket(remote_socket)
     remote_socket.connect((args.target_ip, args.target_port))
     in_data = ''  # incoming data, intended for the local host
     out_data = ''  # outgoing data, intended for the remote host
@@ -215,7 +221,11 @@ def main():
             in_socket, in_addrinfo = proxy_socket.accept()
             if args.verbose:
                 print 'Connection from %s:%d' % in_addrinfo
-
+            if args.use_ssl:
+                in_socket = ssl.wrap_socket(in_socket, certfile="mitm.pem",
+                                            keyfile="mitm.pem",
+                                            server_side=True,
+                                            ssl_version=ssl.PROTOCOL_SSLv23)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))

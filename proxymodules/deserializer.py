@@ -18,7 +18,7 @@ class Module:
 
     def execute(self, data):
         # this is a quick and dirty PoC to show that jython can be used to
-        # deserialze Java objects on the fly, manipulate them and send them
+        # deserialize Java objects on the fly, manipulate them and send them
         # on their way.
         if not self.is_jython:
             print '[!] This module can only be used in jython!'
@@ -28,7 +28,7 @@ class Module:
         bis = io.ByteArrayInputStream(data)
         ois = io.ObjectInputStream(bis)
         obj = ois.readObject()
-        # at this point you have the deserialzed object in obj, do what you
+        # at this point you have the deserialized object in obj, do what you
         # want. Set the jython classpath to include custom classes and cast obj
 
         mod = Modifier()
@@ -51,7 +51,7 @@ class Module:
             print "\t%s %s %s => %s" % (mod.toString(f.getModifiers()),
                                         f.getType(), f.getName(), f.get(obj))
 
-        # serialze the object again and turn it into a string again
+        # serialize the object again and turn it into a string again
         bos = io.ByteArrayOutputStream()
         oos = io.ObjectOutputStream(bos)
         oos.writeObject(obj)
