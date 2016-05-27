@@ -47,7 +47,7 @@ def parse_args():
                         help='comma-separated list of modules to modify data' +
                              ' received from the remote target.')
 
-    parser.add_argument('-t', '--timeout', dest='timeout', type=int, default=5,
+    parser.add_argument('-t', '--timeout', dest='timeout', type=float, default=5,
                         help='Socket timeout to wait for incoming data')
 
     parser.add_argument('-v', '--verbose', dest='verbose', default=False,
