@@ -100,7 +100,8 @@ If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML
 Example for the tcpproxy parameters:
 ```
 1.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserial,http_get -im http_strip,java_serial -t 0.1
-2.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -om http_strip,java_serial -im java_deserial,http_ok -t 0.1
+2.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -om java_deserial,http_get,textdump -im http_strip,textdump,java_serial,hexdump -t 3
+
 
 ```
 

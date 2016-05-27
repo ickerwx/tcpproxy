@@ -7,7 +7,7 @@ class Module:
         self.description = 'Simply adds a fake HTTP header. This is quite usefull if you want to inspect the payload in tools like BurpSuite'
 
     def execute(self, data):
-        http = "HTTP/1.1 200 OK\nServer: tcpproxy\n"
+        http = "HTTP/1.1 200 OK\nServer: tcpproxy\n\n"
 
         return http + data
 
