@@ -5,7 +5,6 @@ To intercept the data, you will either have to be the gateway or do some kind of
 This tool is inspired and partially based on the TCP proxy example used in Justin Seitz' book "Black Hat Python" by no starch press.
 
 ## Usage
-
 ```
 $ python2 tcpproxy.py -h
 usage: tcpproxy.py [-h] [-li LISTEN_IP] [-ti TARGET_IP] [-lp LISTEN_PORT]
@@ -42,19 +41,20 @@ optional arguments:
 
 You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
 
-### Modules
-
+## Modules
 ```
 $ python2 tcpproxy.py -l
-deserializer - Deserialize Java objects (needs jython)
 hexdump - Print a hexdump of the received data
-httpparser - Check if data is HTTP and try to parse it
+http_get - Prepend HTTP header
+http_ok - Prepend HTTP response header
+http_strip - Remove HTTP header from data
+java_deserializer - Deserialization of Java objects (needs jython)
+java_serializer - serialization of XStream XML data (needs jython)
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 textdump - Simply print the received data as text
 all - use all available modules
 ```
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
-
 ```
 #!/usr/bin/env python2
 
@@ -71,43 +71,39 @@ class Module:
 if __name__ == '__main__':
     print 'This module is not supposed to be executed alone!'
 ```
-
-Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one paramter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
-
-### Playing with Java objects
-The deserializer module implements a way to alter serialized java objects on the fly. To use it, change the CLASSPATH env variable to make sure the custom classes are available to your code.
+Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module. Note that self.name will be removed in the near future since I am not using it.
+## Deserializing and Serializing Java Objects to XML
+Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
 ```
-CLASSPATH=$CLASSPATH:/home/user/test/Someclass.jar jython27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om hexdump,deserializer,hexdump
-```
-Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
-
-### Deserializing and Serializing Java Objects to XML
-Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known by tcpproxy.
-```
-CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserial,textdump
+CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserializer,textdump
 ```
 If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
 ```
 
                                             +---------+
                                   +-------> |BurpSuite+-----+
-                                  |         +---------+     v
-                                  |
+                                  |         +---------+     |
+                                  |                         V
 +------------------+        +--------+--+                   +-----------+              +-----------+
 | Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
 +------------------+        +-----------+                   +-----------+              +-----------+
 ```
-Example for the tcpproxy parameters:
+The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialzed objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialzed into XML, fed to the tool and then serialized before sending the response to the client.
 ```
-1.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserial,http_get -im http_strip,java_serial -t 0.1
-2.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -om java_deserial,http_get,textdump -im http_strip,textdump,java_serial,hexdump -t 3
-
-
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserializer,http_post -im http_strip,java_serializer -t 0.1
 ```
+The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserialzer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
+Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialze the XML before the data is sent to the client.
+```
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im java_deserializer,http_post -om http_strip,java_serializer -t 3
+```
+This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialze the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP header, then send the data to burp.
 
+Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of @jbarg.
 
+If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserialzer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
 
-
+Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
 ## TODO
 - implement a way to pass parameters to modules
 - implement logging (pre-/post modification)
