@@ -81,6 +81,33 @@ CLASSPATH=$CLASSPATH:/home/user/test/Someclass.jar jython27 tcpproxy.py -ti 127.
 ```
 Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
 
+### Deserializing and Serializing Java Objects to XML
+Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known by tcpproxy.
+```
+CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserial,textdump
+```
+If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
+```
+
+                                            +---------+
+                                  +-------> |BurpSuite+-----+
+                                  |         +---------+     v
+                                  |
++------------------+        +--------+--+                   +-----------+              +-----------+
+| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
++------------------+        +-----------+                   +-----------+              +-----------+
+```
+Example for the tcpproxy parameters:
+```
+1.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserial,http_get -im http_strip,java_serial -t 0.1
+2.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -om java_deserial,http_get,textdump -im http_strip,textdump,java_serial,hexdump -t 3
+
+
+```
+
+
+
+
 ## TODO
 - implement a way to pass parameters to modules
 - implement logging (pre-/post modification)
