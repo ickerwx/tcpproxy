@@ -86,6 +86,26 @@ Using the Java xstream libary, it is possible to deserialize intercepted seriali
 ```
 CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserial,textdump
 ```
+If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
+```
+
+                                            +---------+
+                                  +-------> |BurpSuite+-----+
+                                  |         +---------+     v
+                                  |
++------------------+        +--------+--+                   +-----------+              +-----------+
+| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
++------------------+        +-----------+                   +-----------+              +-----------+
+```
+Example for the tcpproxy parameters:
+```
+1.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserial,http_get -im http_strip,java_serial -t 0.1
+2.tcpproxy$ CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -om http_strip,java_serial -im java_deserial,http_ok -t 0.1
+
+```
+
+
+
 
 ## TODO
 - implement a way to pass parameters to modules
