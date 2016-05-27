@@ -81,6 +81,11 @@ CLASSPATH=$CLASSPATH:/home/user/test/Someclass.jar jython27 tcpproxy.py -ti 127.
 ```
 Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
 
+### Deserializing and Serializing Java Objects to XML
+Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known by tcpproxy.
+```
+CLASSPATH=/pathTo/xstream/libary/*:/pathTo/jarFiles/* jython 27 tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserial,textdump
+```
 ## TODO
 - implement a way to pass parameters to modules
 - implement logging (pre-/post modification)
