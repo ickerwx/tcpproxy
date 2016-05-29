@@ -2,9 +2,10 @@
 
 
 class Module:
-    def __init__(self):
+    def __init__(self, incoming=False):
         self.name = 'Text display'
         self.description = 'Simply print the received data as text'
+        self.incoming = incoming  # incoming means module is on -im chain
 
     def execute(self, data):
         print data

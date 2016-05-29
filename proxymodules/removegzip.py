@@ -2,10 +2,11 @@
 
 
 class Module:
-    def __init__(self):
+    def __init__(self, incoming=False):
         self.name = 'Remove gzip'
         self.description = 'Replace gzip in the list of accepted encodings ' \
                            'in a HTTP request with booo.'
+        self.incoming = incoming  # incoming means module is on -im chain
         # I chose to replace gzip instead of removing it to keep the parsing
         # logic as simple as possible.
 

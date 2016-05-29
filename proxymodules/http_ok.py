@@ -2,9 +2,10 @@
 
 
 class Module:
-    def __init__(self):
+    def __init__(self, incoming=False):
         self.name = 'http_ok'
         self.description = 'Prepend HTTP response header'
+        self.incoming = incoming  # incoming means module is on -im chain
 
     def execute(self, data):
         http = "HTTP/1.1 200 OK\nServer: tcpproxy\n"

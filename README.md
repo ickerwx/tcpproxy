@@ -60,9 +60,10 @@ Tcpproxy.py uses modules to view or modify the intercepted data. To see the poss
 
 
 class Module:
-    def __init__(self):
+    def __init__(self, incoming=False):
         self.name = 'Text display'
         self.description = 'Simply print the received data as text'
+        self.incoming = incoming  # incoming means module is on -im chain
 
     def execute(self, data):
         print data
@@ -72,6 +73,7 @@ if __name__ == '__main__':
     print 'This module is not supposed to be executed alone!'
 ```
 Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module. Note that self.name will be removed in the near future since I am not using it.
+The incoming parameter in the constructor is set to True when the module is in the incoming chain (-im), otherwise it's False. This way, a module knows in which direction the data is flowing (credits to jbarg for this idea).
 ## Deserializing and Serializing Java Objects to XML
 Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
 ```

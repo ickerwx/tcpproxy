@@ -5,12 +5,14 @@ if 'java' in platform.system().lower():
     import java.io as io
     from com.thoughtworks.xstream import XStream
 
+
 class Module:
-    def __init__(self):
+    def __init__(self, incoming=False):
         self.is_jython = 'java' in platform.system().lower()
         self.name = 'java_serialization'
         self.description = 'Serialization of XStream XML data' if self.is_jython else \
                            'serialization of XStream XML data (needs jython)'
+        self.incoming = incoming  # incoming means module is on -im chain
 
     def execute(self, data):
         if not self.is_jython:

@@ -72,10 +72,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def generate_module_list(modstring):
+def generate_module_list(modstring, incoming=False):
     # This method receives the comma-separated module list, imports the modules
     # and creates a Module instance for each module. A list of these instances
     # is then returned.
+    # The incoming parameter is True when the modules belong to the incoming
+    # chain (-im)
     modlist = []
     if modstring == 'all':
         cwd = os.getcwd()
@@ -83,13 +85,13 @@ def generate_module_list(modstring):
         module_path = cwd + os.sep + 'proxymodules'
         for _, n, _ in pkgutil.iter_modules([module_path]):
             __import__('proxymodules.' + n)
-            modlist.append(sys.modules['proxymodules.' + n].Module())
+            modlist.append(sys.modules['proxymodules.' + n].Module(incoming))
     else:
         namelist = modstring.split(',')
         for n in namelist:
             try:
                 __import__('proxymodules.' + n)
-                modlist.append(sys.modules['proxymodules.' + n].Module())
+                modlist.append(sys.modules['proxymodules.' + n].Module(incoming))
             except ImportError:
                 print 'Module %s not found' % n
                 sys.exit(3)
@@ -195,7 +197,7 @@ def main():
         sys.exit(2)
 
     if args.in_modules is not None:
-        in_modules = generate_module_list(args.in_modules)
+        in_modules = generate_module_list(args.in_modules, True)
     else:
         in_modules = None
 
