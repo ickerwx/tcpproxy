@@ -2,8 +2,9 @@
 
 
 class Module:
-    def __init__(self, incoming=False):
-        self.name = 'Text display'
+    def __init__(self, incoming=False, options=None):
+        # extract the file name from __file__. __file__ is proxzmodules/name.py
+        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
 

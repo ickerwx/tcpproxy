@@ -7,9 +7,10 @@ if 'java' in platform.system().lower():
 
 
 class Module:
-    def __init__(self, incoming=False):
+    def __init__(self, incoming=False, options=None):
         self.is_jython = 'java' in platform.system().lower()
-        self.name = 'java_serialization'
+        # extract the file name from __file__. __file__ is proxzmodules/name.py
+        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Serialization of XStream XML data' if self.is_jython else \
                            'serialization of XStream XML data (needs jython)'
         self.incoming = incoming  # incoming means module is on -im chain

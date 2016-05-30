@@ -2,8 +2,9 @@
 
 
 class Module:
-    def __init__(self, incoming=False):
-        self.name = 'http_strip'
+    def __init__(self, incoming=False, options=None):
+        # extract the file name from __file__. __file__ is proxzmodules/name.py
+        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Remove HTTP header from data'
         self.incoming = incoming  # incoming means module is on -im chain
 

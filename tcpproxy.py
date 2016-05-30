@@ -66,6 +66,9 @@ def parse_args():
     parser.add_argument('-l', '--list', dest='list', action='store_true',
                         help='list available modules')
 
+    parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
+                        help='Print help of selected module')
+
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
                         default=False, help='use SSL, certificate is mitm.pem')
 
@@ -89,13 +92,34 @@ def generate_module_list(modstring, incoming=False):
     else:
         namelist = modstring.split(',')
         for n in namelist:
+            name, options = parse_module_options(n)
             try:
-                __import__('proxymodules.' + n)
-                modlist.append(sys.modules['proxymodules.' + n].Module(incoming))
+                __import__('proxymodules.' + name)
+                modlist.append(sys.modules['proxymodules.' + name].Module(incoming, options))
             except ImportError:
-                print 'Module %s not found' % n
+                print 'Module %s not found' % name
                 sys.exit(3)
     return modlist
+
+
+def parse_module_options(n):
+    # n is of the form module_name:key1=val1,key2=val2 ...
+    # this method returns the module name and a dict with the options
+    n = n.split(':')
+    if len(n) == 1:
+        # no module options present
+        return n[0], None
+    name = n[0]
+    optionlist = n[1].split(',')
+    options = {}
+    for op in optionlist:
+        try:
+            k, v = op.split('=')
+            options[k] = v
+        except ValueError:
+            print op, 'is not valid!'
+            sys.exit(23)
+    return name, options
 
 
 def list_modules():
@@ -104,9 +128,19 @@ def list_modules():
     module_path = cwd + os.sep + 'proxymodules'
     for _, module, _ in pkgutil.iter_modules([module_path]):
         __import__('proxymodules.' + module)
-        print '%s - %s' % (module, sys.modules['proxymodules.' +
-                                               module].Module().description)
+        m = sys.modules['proxymodules.' + module].Module()
+        print '%s - %s' % (m.name, m.description)
     print 'all - use all available modules'
+
+
+def print_module_help(modlist):
+    # parse comma-separated list of module names, print module help text
+    modules = generate_module_list(modlist)
+    for m in modules:
+        try:
+            print m.name, '-', m.help()
+        except AttributeError:
+            print 'No help available.'
 
 
 def receive_from(s, timeout):
@@ -186,6 +220,9 @@ def main():
     args = parse_args()
     if args.list:
         list_modules()
+        sys.exit(0)
+    if args.help_modules is not None:
+        print_module_help(args.helpname)
         sys.exit(0)
 
     if args.listen_ip != '0.0.0.0' and not is_valid_ip4(args.listen_ip):
