@@ -3,7 +3,7 @@
 
 class Module:
     def __init__(self, incoming=False, options=None):
-        # extract the file name from __file__. __file__ is proxzmodules/name.py
+        # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Print a hexdump of the received data'
         self.incoming = incoming  # incoming means module is on -im chain
