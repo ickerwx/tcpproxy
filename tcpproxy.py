@@ -141,7 +141,7 @@ def print_module_help(modlist):
         try:
             print m.name, '-', m.help()
         except AttributeError:
-            print 'No help available.'
+            print 'No options.'
 
 
 def receive_from(s, timeout):
@@ -223,7 +223,7 @@ def main():
         list_modules()
         sys.exit(0)
     if args.help_modules is not None:
-        print_module_help(args.helpname)
+        print_module_help(args.help_modules)
         sys.exit(0)
 
     if args.listen_ip != '0.0.0.0' and not is_valid_ip4(args.listen_ip):

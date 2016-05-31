@@ -77,7 +77,7 @@ if __name__ == '__main__':
 ```
 Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
 The incoming parameter in the constructor is set to True when the module is in the incoming chain (-im), otherwise it's False. This way, a module knows in which direction the data is flowing (credits to jbarg for this idea).
-The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, it may be a good idea to also implement a help() method. See the hexdump module for an example:
+The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. See the hexdump module for an example:
 ```
 #!/usr/bin/env python2
 
@@ -85,10 +85,10 @@ The options parameter is a dictionary with the keys and values passed to the mod
 class Module:
     def __init__(self, incoming=False, options=None):
         # -- 8< --- snip
-        if 'length' in options.keys():
-            self.len = int(options['length'])
-        else:
-            self.len = 16
+        self.len = 16
+        if options is not None:
+            if 'length' in options.keys():
+                self.len = int(options['length'])
 
     def help(self):
         return 'length: bytes per line (int)'

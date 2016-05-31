@@ -7,10 +7,10 @@ class Module:
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Print a hexdump of the received data'
         self.incoming = incoming  # incoming means module is on -im chain
-        if 'length' in options.keys():
-            self.len = int(options['length'])
-        else:
-            self.len = 16
+        self.len = 16
+        if options is not None:
+            if 'length' in options.keys():
+                self.len = int(options['length'])
 
     def help(self):
         return 'length: bytes per line (int)'
