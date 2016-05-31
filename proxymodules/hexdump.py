@@ -13,7 +13,7 @@ class Module:
                 self.len = int(options['length'])
 
     def help(self):
-        return 'length: bytes per line (int)'
+        return '\tlength: bytes per line (int)'
 
     def execute(self, data):
         # this is a pretty hex dumping function directly taken from

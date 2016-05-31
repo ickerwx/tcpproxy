@@ -67,17 +67,38 @@ class Module:
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
+        self.find = None  # if find is not None, this text will be highlighted
+        if options is not None:
+            if 'find' in options.keys():
+                self.find = options['find']  # text to highlight
+            if 'color' in options.keys():
+                self.color = '\033[' + options['color'] + 'm'  # highlight color
+            else:
+                self.color = '\033[31;1m'
 
     def execute(self, data):
-        print data
+        if self.find is None:
+            print data
+        else:
+            pdata = data.replace(self.find, self.color + self.find + '\033[0m')
+            print pdata
         return data
+
+    def help(self):
+        h = '\tfind: string that should be highlighted\n'
+        h += ('\tcolor: ANSI color code. Will be wrapped with \\033[ and m, so'
+              ' passing 32;1 will result in \\033[32;1m (bright green)')
+        return h
+
 
 if __name__ == '__main__':
     print 'This module is not supposed to be executed alone!'
 ```
 Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
 The incoming parameter in the constructor is set to True when the module is in the incoming chain (-im), otherwise it's False. This way, a module knows in which direction the data is flowing (credits to jbarg for this idea).
-The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. See the hexdump module for an example:
+The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. This method must return a string. Use one line per option, make sure each line starts with a \t character for proper indentation.
+
+See the hexdump module for an additional options example:
 ```
 #!/usr/bin/env python2
 
@@ -91,7 +112,7 @@ class Module:
                 self.len = int(options['length'])
 
     def help(self):
-        return 'length: bytes per line (int)'
+        return '\tlength: bytes per line (int)'
 
     def execute(self, data):
         # -- 8< --- snip
@@ -104,7 +125,7 @@ if __name__ == '__main__':
 ```
 The above example should give you an idea how to make use of module parameters. A calling example would be:
 ```
-python2 tcpproxy.py -om hexdump:length=8,http_post,hexdump:length=12 -lp 12344 -ti 127.0.0.1 -tp 12345
+python2 tcpproxy.py -om hexdump:length=8,http_post,hexdump:length=12 -ti 127.0.0.1 -tp 12345
 < < < < out: hexdump
 0000   77 6C 6B 66 6A 6C 77 71    wlkfjlwq
 0008   6B 66 6A 68 6C 6B 77 71    kfjhlkwq
@@ -155,7 +176,7 @@ $ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -
 ```
 This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP header, then send the data to burp.
 
-Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of @jbarg.
+Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
 
 If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
 

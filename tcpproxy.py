@@ -104,7 +104,7 @@ def generate_module_list(modstring, incoming=False):
 
 
 def parse_module_options(n):
-    # n is of the form module_name:key1=val1:key2:val2 ...
+    # n is of the form module_name:key1=val1:key2=val2 ...
     # this method returns the module name and a dict with the options
     n = n.split(':', 1)
     if len(n) == 1:
@@ -139,9 +139,10 @@ def print_module_help(modlist):
     modules = generate_module_list(modlist)
     for m in modules:
         try:
-            print m.name, '-', m.help()
+            print m.name
+            print m.help()
         except AttributeError:
-            print 'No options.'
+            print '\tNo options.'
 
 
 def receive_from(s, timeout):
@@ -174,7 +175,7 @@ def handle_data(data, modules, dont_chain, incoming=False):
 
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
-    # host and the remote host, while letting modules work on the date before
+    # host and the remote host, while letting modules work on the data before
     # passing it on.
     remote_socket = socket.socket()
     if args.use_ssl:
