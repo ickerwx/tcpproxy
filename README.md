@@ -42,7 +42,7 @@ optional arguments:
 ```
 
 You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
-You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1,key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
+You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
 ## Modules
 ```
 $ python2 tcpproxy.py -l
@@ -63,7 +63,7 @@ Tcpproxy.py uses modules to view or modify the intercepted data. To see the poss
 
 class Module:
     def __init__(self, incoming=False, options=None):
-        # extract the file name from __file__. __file__ is proxzmodules/name.py
+        # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
@@ -127,7 +127,7 @@ python2 tcpproxy.py -om hexdump:length=8,http_post,hexdump:length=12 -lp 12344 -
 0060   77 71 6B 65 6A 66 68 77 71 6C 6B 65    wqkejfhwqlke
 006C   6A 66 68 0A                            jfh.
 ```
-You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes.
+You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes. To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
 ## Deserializing and Serializing Java Objects to XML
 Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
 ```

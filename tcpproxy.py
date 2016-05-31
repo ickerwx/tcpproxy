@@ -81,6 +81,7 @@ def generate_module_list(modstring, incoming=False):
     # is then returned.
     # The incoming parameter is True when the modules belong to the incoming
     # chain (-im)
+    # modstring looks like mod1,mod2:key=val,mod3:key=val:key2=val2,mod4 ...
     modlist = []
     if modstring == 'all':
         cwd = os.getcwd()
@@ -103,14 +104,14 @@ def generate_module_list(modstring, incoming=False):
 
 
 def parse_module_options(n):
-    # n is of the form module_name:key1=val1,key2=val2 ...
+    # n is of the form module_name:key1=val1:key2:val2 ...
     # this method returns the module name and a dict with the options
-    n = n.split(':')
+    n = n.split(':', 1)
     if len(n) == 1:
         # no module options present
         return n[0], None
     name = n[0]
-    optionlist = n[1].split(',')
+    optionlist = n[1].split(':')
     options = {}
     for op in optionlist:
         try:
