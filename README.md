@@ -46,7 +46,7 @@ optional arguments:
 You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
 You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
 ## Modules
-```
+```python
 $ python2 tcpproxy.py --list
 hexdump - Print a hexdump of the received data
 http_ok - Prepend HTTP response header
@@ -60,7 +60,7 @@ textdump - Simply print the received data as text
 
 ```
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
-```
+```python
 #!/usr/bin/env python2
 
 
@@ -102,7 +102,7 @@ The incoming parameter in the constructor is set to True when the module is in t
 The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. This method must return a string. Use one line per option, make sure each line starts with a \t character for proper indentation.
 
 See the hexdump module for an additional options example:
-```
+```python
 #!/usr/bin/env python2
 
 
