@@ -27,18 +27,18 @@ def parse_args():
                                                  'Select modules to handle ' +
                                                  'the intercepted traffic.')
 
+    parser.add_argument('-ti', '--targetip', dest='target_ip', required=True,
+                        help='remote target IP')
+
+    parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
+                        help='remote target port', required=True)
+
     parser.add_argument('-li', '--listenip', dest='listen_ip',
                         default='0.0.0.0', help='IP address to listen for ' +
                         'incoming data')
 
-    parser.add_argument('-ti', '--targetip', dest='target_ip',
-                        help='remote target IP')
-
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
                         default=8080, help='port to listen on')
-
-    parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
-                        help='remote target port')
 
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
