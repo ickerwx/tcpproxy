@@ -6,6 +6,7 @@ import sys
 import threading
 import socket
 import ssl
+import time
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -63,7 +64,10 @@ def parse_args():
                         help='Don\'t send output from one module to the ' +
                              'next one')
 
-    parser.add_argument('-l', '--list', dest='list', action='store_true',
+    parser.add_argument('-l', '--log', dest='logfile', default=None,
+                        help='Log all data to a file before modules are run.')
+
+    parser.add_argument('--list', dest='list', action='store_true',
                         help='list available modules')
 
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
@@ -83,23 +87,15 @@ def generate_module_list(modstring, incoming=False):
     # chain (-im)
     # modstring looks like mod1,mod2:key=val,mod3:key=val:key2=val2,mod4 ...
     modlist = []
-    if modstring == 'all':
-        cwd = os.getcwd()
-        # all modules must exist in the proxymodules directory
-        module_path = cwd + os.sep + 'proxymodules'
-        for _, n, _ in pkgutil.iter_modules([module_path]):
-            __import__('proxymodules.' + n)
-            modlist.append(sys.modules['proxymodules.' + n].Module(incoming))
-    else:
-        namelist = modstring.split(',')
-        for n in namelist:
-            name, options = parse_module_options(n)
-            try:
-                __import__('proxymodules.' + name)
-                modlist.append(sys.modules['proxymodules.' + name].Module(incoming, options))
-            except ImportError:
-                print 'Module %s not found' % name
-                sys.exit(3)
+    namelist = modstring.split(',')
+    for n in namelist:
+        name, options = parse_module_options(n)
+        try:
+            __import__('proxymodules.' + name)
+            modlist.append(sys.modules['proxymodules.' + name].Module(incoming, options))
+        except ImportError:
+            print 'Module %s not found' % name
+            sys.exit(3)
     return modlist
 
 
@@ -131,7 +127,6 @@ def list_modules():
         __import__('proxymodules.' + module)
         m = sys.modules['proxymodules.' + module].Module()
         print '%s - %s' % (m.name, m.description)
-    print 'all - use all available modules'
 
 
 def print_module_help(modlist):
@@ -160,12 +155,12 @@ def receive_from(s, timeout):
     return b
 
 
-def handle_data(data, modules, dont_chain, incoming=False):
+def handle_data(data, modules, dont_chain, verbose=False):
     # execute each active module on the data. If dont_chain is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
-        print ("> > > > in: " if incoming else "< < < < out: ") + m.name
+        print ("> > > > in: " if m.incoming else "< < < < out: ") + m.name
         if dont_chain:
             m.execute(data)
         else:
@@ -188,27 +183,30 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # might be necessary to read banners, etc.
     if args.receive_first:
         in_data = receive_from(remote_socket, args.timeout)
+        log(args.logfile, '> > > in\n' + in_data)
         if len(in_data):
             if in_modules is not None:
                 in_data = handle_data(in_data, in_modules,
-                                      args.chain_modules, True)
+                                      args.no_chain_modules, args.verbose)
             local_socket.send(in_data)
 
     # This loop ends when no more data is received on either the local or the
     # remote socket
     while True:
         out_data = receive_from(local_socket, args.timeout)
+        log(args.logfile, '< < < out\n' + out_data)
         if len(out_data):
             if out_modules is not None:
                 out_data = handle_data(out_data, out_modules,
-                                       args.no_chain_modules)
+                                       args.no_chain_modules, args.verbose)
             remote_socket.send(out_data)
 
         in_data = receive_from(remote_socket, args.timeout)
+        log(args.logfile, '> > > in\n' + in_data)
         if len(in_data):
             if in_modules is not None:
                 in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules, True)
+                                      args.no_chain_modules, args.verbose)
             local_socket.send(in_data)
 
         if not len(in_data) or not len(out_data):
@@ -218,11 +216,36 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             break
 
 
+def log(handle, message, message_only=False):
+    # if message_onlz is True, only the message will be logged
+    # otherwise the message will be prefixed with a timestamp and a line is
+    # written after the message to make the log file easier to write
+    if handle is None:
+        return
+    if not message_only:
+        logentry = time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n'
+    else:
+        logentry = ''
+    logentry += message
+    if not message_only:
+        logentry += '\n' + '-' * 20 + '\n'
+    handle.write(logentry)
+
+
 def main():
     args = parse_args()
+    if args.logfile is not None:
+        try:
+            args.logfile = open(args.logfile, 'a', 0)  # unbuffered
+        except Exception, ex:
+            print 'Error opening logfile'
+            print ex
+            sys.exit(4)
+
     if args.list:
         list_modules()
         sys.exit(0)
+
     if args.help_modules is not None:
         print_module_help(args.help_modules)
         sys.exit(0)
@@ -255,7 +278,7 @@ def main():
         sys.exit(5)
 
     proxy_socket.listen(10)
-
+    log(args.logfile, str(args))
     # endless loop until ctrl+c
     try:
         while True:
@@ -270,8 +293,10 @@ def main():
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))
+            log(args.logfile, "Starting proxy thread")
             proxy_thread.start()
     except KeyboardInterrupt:
+        log(args.logfile, 'Ctrl+C detected, exiting...')
         print '\nCtrl+C detected, exiting...'
         sys.exit(0)
 

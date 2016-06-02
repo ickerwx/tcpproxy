@@ -35,7 +35,9 @@ optional arguments:
   -v, --verbose         More verbose output of status information
   -r, --receivefirst    Receive data from remote first, e.g. a banner
   -n, --no-chain        Don't send output from one module to the next one
-  -l, --list            list available modules
+  -l LOGFILE, --log LOGFILE
+                        Log all data to a file before modules are run.
+  --list                list available modules
   -lo HELP_MODULES, --list-options HELP_MODULES
                         Print help of selected module
   -s, --ssl             use SSL, certificate is mitm.pem
@@ -45,16 +47,17 @@ You will have to  provide TARGET_IP and TARGET_PORT, the default listening setti
 You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
 ## Modules
 ```
-$ python2 tcpproxy.py -l
+$ python2 tcpproxy.py --list
 hexdump - Print a hexdump of the received data
-http_get - Prepend HTTP header
 http_ok - Prepend HTTP response header
+http_post - Prepend HTTP header
 http_strip - Remove HTTP header from data
 java_deserializer - Deserialization of Java objects (needs jython)
 java_serializer - serialization of XStream XML data (needs jython)
+log - Log data in the module chain. Use in addition to general logging (-l/--log).
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 textdump - Simply print the received data as text
-all - use all available modules
+
 ```
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
 ```
@@ -181,7 +184,9 @@ Using this setup, you are able to take advantage of Burp's capabilities, like th
 If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
 
 Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
+##Logging
+You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
 ## TODO
 - [X] implement a way to pass parameters to modules
-- [ ] implement logging (pre-/post modification)
+- [X] implement logging (pre-/post modification)
 - [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts)
