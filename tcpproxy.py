@@ -7,6 +7,8 @@ import threading
 import socket
 import ssl
 import time
+import select
+import errno
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -175,45 +177,48 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     remote_socket = socket.socket()
     if args.use_ssl:
         remote_socket = ssl.wrap_socket(remote_socket)
-    remote_socket.connect((args.target_ip, args.target_port))
-    in_data = ''  # incoming data, intended for the local host
-    out_data = ''  # outgoing data, intended for the remote host
-
-    # instead of sending data to the remote host, receive some data first.
-    # might be necessary to read banners, etc.
-    if args.receive_first:
-        in_data = receive_from(remote_socket, args.timeout)
-        log(args.logfile, '> > > in\n' + in_data)
-        if len(in_data):
-            if in_modules is not None:
-                in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules, args.verbose)
-            local_socket.send(in_data)
+    try:
+        remote_socket.connect((args.target_ip, args.target_port))
+    except socket.error as serr:
+        if serr.errno == errno.ECONNREFUSED:
+            print "Connection refused"
+            return None
+        else:
+            raise serr
 
     # This loop ends when no more data is received on either the local or the
     # remote socket
-    while True:
-        out_data = receive_from(local_socket, args.timeout)
-        log(args.logfile, '< < < out\n' + out_data)
-        if len(out_data):
-            if out_modules is not None:
-                out_data = handle_data(out_data, out_modules,
-                                       args.no_chain_modules, args.verbose)
-            remote_socket.send(out_data)
+    running = True
+    while running:
+        socket_list = [remote_socket, local_socket]
+        read_sockets, _, _ = select.select(socket_list, [], [])
+        for sock in read_sockets:
+            if sock == local_socket:
+                out_data = receive_from(local_socket, args.timeout)
+                log(args.logfile, '< < < out\n' + out_data)
+                if len(out_data):
+                    if out_modules is not None:
+                        out_data = handle_data(out_data, out_modules,
+                                               args.no_chain_modules, args.verbose)
+                    remote_socket.send(out_data)
+                else:
+                    remote_socket.close()
+                    local_socket.close()
+                    running = False
+            elif sock == remote_socket:
+                in_data = receive_from(remote_socket, args.timeout)
+                log(args.logfile, '> > > in\n' + in_data)
+                if len(in_data):
+                    if in_modules is not None:
+                        in_data = handle_data(in_data, in_modules,
+                                              args.no_chain_modules, args.verbose)
+                    local_socket.send(in_data)
 
-        in_data = receive_from(remote_socket, args.timeout)
-        log(args.logfile, '> > > in\n' + in_data)
-        if len(in_data):
-            if in_modules is not None:
-                in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules, args.verbose)
-            local_socket.send(in_data)
-
-        if not len(in_data) or not len(out_data):
-            # no more data on one of the sockets, exit the loop and return
-            local_socket.close()
-            remote_socket.close()
-            break
+                else:
+                    local_socket.close()
+                    remote_socket.close()
+                    break
+                    running = False
 
 
 def log(handle, message, message_only=False):
@@ -270,6 +275,7 @@ def main():
 
     # this is the socket we will listen on for incoming connections
     proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    proxy_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         proxy_socket.bind((args.listen_ip, args.listen_port))
