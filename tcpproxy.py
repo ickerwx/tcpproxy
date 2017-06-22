@@ -260,7 +260,6 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                 local_socket.send(data)
 
 
-
 def log(handle, message, message_only=False):
     # if message_onlz is True, only the message will be logged
     # otherwise the message will be prefixed with a timestamp and a line is
