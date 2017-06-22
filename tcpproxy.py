@@ -184,11 +184,12 @@ def is_client_hello(sock):
 
 def enable_ssl(remote_socket, local_socket):
     local_socket = ssl.wrap_socket(local_socket,
-                    server_side=True,
-                    certfile="mitm.pem",
-                    keyfile="mitm.pem",
-                    #  ssl_version=ssl.PROTOCOL_SSLv23,
-                  )
+                server_side=True,
+                certfile="mitm.pem",
+                keyfile="mitm.pem",
+                #  ssl_version=ssl.PROTOCOL_SSLv23,
+              )
+
     remote_socket = ssl.wrap_socket(remote_socket)
     return remote_socket, local_socket
 
@@ -221,9 +222,14 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             not isinstance(local_socket, ssl.SSLSocket) and
             is_client_hello(local_socket)
            ):
-            remote_socket, local_socket = enable_ssl(remote_socket, local_socket)
-            if args.verbose:
-                print "Enable SSL"
+            try:
+                if args.verbose:
+                    print "Enable SSL"
+                remote_socket, local_socket = enable_ssl(remote_socket, local_socket)
+            except ssl.SSLError as e:
+                print "SSL handshake failed", str(e)
+                break
+
             read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
         for sock in read_sockets:
             data = receive_from(sock, args.timeout)
