@@ -191,8 +191,15 @@ def enable_ssl(remote_socket, local_socket):
               )
 
     remote_socket = ssl.wrap_socket(remote_socket)
-    return remote_socket, local_socket
+    return [remote_socket, local_socket]
 
+
+def waiting_for_starttls(local_socket, read_sockets):
+    return (args.use_starttls and
+        local_socket in read_sockets and
+        not isinstance(local_socket, ssl.SSLSocket) and
+        is_client_hello(local_socket)
+       )
 
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
@@ -217,20 +224,18 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     running = True
     while running:
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
-        if (args.use_starttls and
-            local_socket in read_sockets and
-            not isinstance(local_socket, ssl.SSLSocket) and
-            is_client_hello(local_socket)
-           ):
+
+        if waiting_for_starttls(local_socket, read_sockets):
             try:
                 if args.verbose:
                     print "Enable SSL"
-                remote_socket, local_socket = enable_ssl(remote_socket, local_socket)
+                ssl_sockets = enable_ssl(remote_socket, local_socket)
             except ssl.SSLError as e:
                 print "SSL handshake failed", str(e)
                 break
 
-            read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
+            read_sockets, _, _ = select.select(ssl_sockets, [], [])
+
         for sock in read_sockets:
             data = receive_from(sock, args.timeout)
             if len(data)==0:
