@@ -238,26 +238,33 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
         for sock in read_sockets:
             data = receive_from(sock, args.timeout)
-            if len(data)==0:
-                if args.verbose:
-                    print "Connection closed"
-                remote_socket.close()
-                local_socket.close()
-                running = False
-                break
 
             if sock == local_socket:
-                log(args.logfile, '< < < out\n' + data)
-                if out_modules is not None:
-                    data = handle_data(data, out_modules,
-                                           args.no_chain_modules, args.verbose)
-                remote_socket.send(data)
+                if len(data):
+                    log(args.logfile, '< < < out\n' + data)
+                    if out_modules is not None:
+                        data = handle_data(data, out_modules,
+                                               args.no_chain_modules, args.verbose)
+                    remote_socket.send(data)
+                else:
+                    if args.verbose:
+                        print "Connection closed"
+                    remote_socket.close()
+                    running = False
+                    break
             elif sock == remote_socket:
-                log(args.logfile, '> > > in\n' + data)
-                if in_modules is not None:
-                    in_data = handle_data(data, in_modules,
-                                          args.no_chain_modules, args.verbose)
-                local_socket.send(data)
+                if len(data):
+                    log(args.logfile, '> > > in\n' + data)
+                    if in_modules is not None:
+                        in_data = handle_data(data, in_modules,
+                                              args.no_chain_modules, args.verbose)
+                    local_socket.send(data)
+                else:
+                    if args.verbose:
+                        print "Connection closed"
+                    local_socket.close()
+                    running = False
+                    break
 
 
 def log(handle, message, message_only=False):
