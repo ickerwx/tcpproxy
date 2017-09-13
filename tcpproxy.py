@@ -50,9 +50,6 @@ def parse_args():
                         help='comma-separated list of modules to modify data' +
                              ' received from the remote target.')
 
-    parser.add_argument('-t', '--timeout', dest='timeout', type=float, default=5,
-                        help='Socket timeout to wait for incoming data')
-
     parser.add_argument('-v', '--verbose', dest='verbose', default=False,
                         action='store_true',
                         help='More verbose output of status information')
@@ -145,18 +142,6 @@ def print_module_help(modlist):
             print '\tNo options.'
 
 
-def receive_from(s, timeout):
-    # receive data from a socket until no more data is there or until timeout
-    b = ""
-    #  s.settimeout(timeout)
-    while True:
-        data = s.recv(4096)
-        b += data
-        if not data or len(data)<4096:
-            break
-    return b
-
-
 def handle_data(data, modules, dont_chain, verbose=False):
     # execute each active module on the data. If dont_chain is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
@@ -237,7 +222,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             read_sockets, _, _ = select.select(ssl_sockets, [], [])
 
         for sock in read_sockets:
-            data = receive_from(sock, args.timeout)
+            data = sock.recv(4096)
 
             if sock == local_socket:
                 if len(data):
