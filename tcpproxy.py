@@ -7,6 +7,8 @@ import threading
 import socket
 import ssl
 import time
+import select
+import errno
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -48,9 +50,6 @@ def parse_args():
                         help='comma-separated list of modules to modify data' +
                              ' received from the remote target.')
 
-    parser.add_argument('-t', '--timeout', dest='timeout', type=float, default=5,
-                        help='Socket timeout to wait for incoming data')
-
     parser.add_argument('-v', '--verbose', dest='verbose', default=False,
                         action='store_true',
                         help='More verbose output of status information')
@@ -75,6 +74,9 @@ def parse_args():
 
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
                         default=False, help='use SSL, certificate is mitm.pem')
+
+    parser.add_argument('-a', '--starttls', dest='use_starttls', action='store_true',
+                        default=False, help='use STARTTLS, certificate is mitm.pem')
 
     return parser.parse_args()
 
@@ -114,7 +116,7 @@ def parse_module_options(n):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            print op, 'is not valid!'
+            print op, ' is not valid!'
             sys.exit(23)
     return name, options
 
@@ -143,15 +145,12 @@ def print_module_help(modlist):
 def receive_from(s, timeout):
     # receive data from a socket until no more data is there or until timeout
     b = ""
-    s.settimeout(timeout)
-    try:
-        while True:
-            data = s.recv(4096)
-            if not data:
-                break
-            b += data
-    except:
-        pass
+    #  s.settimeout(timeout)
+    while True:
+        data = s.recv(4096)
+        b += data
+        if not data or len(data)<4096:
+            break
     return b
 
 
@@ -168,6 +167,38 @@ def handle_data(data, modules, dont_chain, verbose=False):
     return data
 
 
+def is_client_hello(sock):
+    firstbytes = sock.recv(128, socket.MSG_PEEK)
+    return (len(firstbytes) >= 3 and
+            firstbytes[0] == "\x16" and
+            firstbytes[1:3] in [ "\x03\x00",
+                                 "\x03\x01",
+                                 "\x03\x02",
+                                 "\x03\x03",
+                                 "\x02\x00", ]
+        )
+
+
+def enable_ssl(remote_socket, local_socket):
+    local_socket = ssl.wrap_socket(local_socket,
+                server_side=True,
+                certfile="mitm.pem",
+                keyfile="mitm.pem",
+                ssl_version=ssl.PROTOCOL_TLS,
+              )
+
+    remote_socket = ssl.wrap_socket(remote_socket)
+    return [remote_socket, local_socket]
+
+
+def starttls(args, local_socket, read_sockets):
+    return (args.use_starttls and
+        local_socket in read_sockets and
+        not isinstance(local_socket, ssl.SSLSocket) and
+        is_client_hello(local_socket)
+       )
+
+
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
@@ -175,45 +206,64 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     remote_socket = socket.socket()
     if args.use_ssl:
         remote_socket = ssl.wrap_socket(remote_socket)
-    remote_socket.connect((args.target_ip, args.target_port))
-    in_data = ''  # incoming data, intended for the local host
-    out_data = ''  # outgoing data, intended for the remote host
 
-    # instead of sending data to the remote host, receive some data first.
-    # might be necessary to read banners, etc.
-    if args.receive_first:
-        in_data = receive_from(remote_socket, args.timeout)
-        log(args.logfile, '> > > in\n' + in_data)
-        if len(in_data):
-            if in_modules is not None:
-                in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules, args.verbose)
-            local_socket.send(in_data)
+    try:
+        remote_socket.connect((args.target_ip, args.target_port))
+    except socket.error as serr:
+        if serr.errno == errno.ECONNREFUSED:
+            print '%s:%d - Connection refused' % (args.target_ip,
+                                                  args.target_port)
+            return None
+        else:
+            raise serr
 
     # This loop ends when no more data is received on either the local or the
     # remote socket
-    while True:
-        out_data = receive_from(local_socket, args.timeout)
-        log(args.logfile, '< < < out\n' + out_data)
-        if len(out_data):
-            if out_modules is not None:
-                out_data = handle_data(out_data, out_modules,
-                                       args.no_chain_modules, args.verbose)
-            remote_socket.send(out_data)
+    running = True
+    while running:
+        read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
 
-        in_data = receive_from(remote_socket, args.timeout)
-        log(args.logfile, '> > > in\n' + in_data)
-        if len(in_data):
-            if in_modules is not None:
-                in_data = handle_data(in_data, in_modules,
-                                      args.no_chain_modules, args.verbose)
-            local_socket.send(in_data)
+        if starttls(args, local_socket, read_sockets):
+            try:
+                if args.verbose:
+                    print "Enable SSL"
+                ssl_sockets = enable_ssl(remote_socket, local_socket)
+                remote_socket, local_socket = ssl_sockets
+            except ssl.SSLError as e:
+                print "SSL handshake failed", str(e)
+                break
 
-        if not len(in_data) or not len(out_data):
-            # no more data on one of the sockets, exit the loop and return
-            local_socket.close()
-            remote_socket.close()
-            break
+            read_sockets, _, _ = select.select(ssl_sockets, [], [])
+
+        for sock in read_sockets:
+            data = sock.recv(4096)
+
+            if sock == local_socket:
+                if len(data):
+                    log(args.logfile, '< < < out\n' + data)
+                    if out_modules is not None:
+                        data = handle_data(data, out_modules,
+                                               args.no_chain_modules, args.verbose)
+                    remote_socket.send(data)
+                else:
+                    if args.verbose:
+                        print "Connection closed"
+                    remote_socket.close()
+                    running = False
+                    break
+            elif sock == remote_socket:
+                if len(data):
+                    log(args.logfile, '> > > in\n' + data)
+                    if in_modules is not None:
+                        in_data = handle_data(data, in_modules,
+                                              args.no_chain_modules, args.verbose)
+                    local_socket.send(data)
+                else:
+                    if args.verbose:
+                        print "Connection closed"
+                    local_socket.close()
+                    running = False
+                    break
 
 
 def log(handle, message, message_only=False):
@@ -223,7 +273,8 @@ def log(handle, message, message_only=False):
     if handle is None:
         return
     if not message_only:
-        logentry = time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n'
+        logentry = "%s %s\n" % (time.strftime('%Y%m%d-%H%M%S'),
+                                 str(time.time()))
     else:
         logentry = ''
     logentry += message
@@ -237,7 +288,7 @@ def main():
     if args.logfile is not None:
         try:
             args.logfile = open(args.logfile, 'a', 0)  # unbuffered
-        except Exception, ex:
+        except Exception as ex:
             print 'Error opening logfile'
             print ex
             sys.exit(4)
@@ -270,10 +321,11 @@ def main():
 
     # this is the socket we will listen on for incoming connections
     proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    proxy_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         proxy_socket.bind((args.listen_ip, args.listen_port))
-    except socket.error, e:
+    except socket.error as e:
         print e.strerror
         sys.exit(5)
 
@@ -287,9 +339,10 @@ def main():
                 print 'Connection from %s:%d' % in_addrinfo
             if args.use_ssl:
                 in_socket = ssl.wrap_socket(in_socket, certfile="mitm.pem",
-                                            keyfile="mitm.pem",
-                                            server_side=True,
-                                            ssl_version=ssl.PROTOCOL_SSLv23)
+                                        keyfile="mitm.pem",
+                                        do_handshake_on_connect=False,
+                                        server_side=True,
+                                        ssl_version=ssl.PROTOCOL_TLS)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))
