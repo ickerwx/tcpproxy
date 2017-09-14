@@ -172,19 +172,20 @@ def enable_ssl(remote_socket, local_socket):
                 server_side=True,
                 certfile="mitm.pem",
                 keyfile="mitm.pem",
-                #  ssl_version=ssl.PROTOCOL_SSLv23,
+                ssl_version=ssl.PROTOCOL_TLS,
               )
 
     remote_socket = ssl.wrap_socket(remote_socket)
     return [remote_socket, local_socket]
 
 
-def waiting_for_starttls(local_socket, read_sockets):
+def starttls(args, local_socket, read_sockets):
     return (args.use_starttls and
         local_socket in read_sockets and
         not isinstance(local_socket, ssl.SSLSocket) and
         is_client_hello(local_socket)
        )
+
 
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
@@ -210,11 +211,12 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     while running:
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
 
-        if waiting_for_starttls(local_socket, read_sockets):
+        if starttls(args, local_socket, read_sockets):
             try:
                 if args.verbose:
                     print "Enable SSL"
                 ssl_sockets = enable_ssl(remote_socket, local_socket)
+                remote_socket, local_socket = ssl_sockets
             except ssl.SSLError as e:
                 print "SSL handshake failed", str(e)
                 break
@@ -328,7 +330,7 @@ def main():
                                         keyfile="mitm.pem",
                                         do_handshake_on_connect=False,
                                         server_side=True,
-                                        ssl_version=ssl.PROTOCOL_SSLv23)
+                                        ssl_version=ssl.PROTOCOL_TLS)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))
