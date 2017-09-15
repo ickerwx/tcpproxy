@@ -54,10 +54,6 @@ def parse_args():
                         action='store_true',
                         help='More verbose output of status information')
 
-    parser.add_argument('-r', '--receivefirst', dest='receive_first',
-                        action='store_true', default=False,
-                        help='Receive data from remote first, e.g. a banner')
-
     parser.add_argument('-n', '--no-chain', dest='no_chain_modules',
                         action='store_true', default=False,
                         help='Don\'t send output from one module to the ' +
