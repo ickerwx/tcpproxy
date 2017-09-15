@@ -276,7 +276,7 @@ def log(handle, message, message_only=False):
 
 def main():
     args = parse_args()
-    if args.list is False:
+    if args.list is False and args.help_modules is None:
         if not args.target_ip:
             print 'Target IP is required: -ti'
             sys.exit(6)
