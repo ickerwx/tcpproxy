@@ -9,7 +9,6 @@ class Module:
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Replace text by using regular expressions'
         self.incoming = incoming  # incoming means module is on -im chain
-        self.find = None  # if find is not None, this text will be highlighted
         if options is not None:
             self.search = options['search']
             self.replace = options['replace']
