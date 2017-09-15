@@ -29,14 +29,14 @@ def parse_args():
                                                  'Select modules to handle ' +
                                                  'the intercepted traffic.')
 
-    parser.add_argument('-ti', '--targetip', dest='target_ip', required=True,
-                        help='remote target IP')
+    parser.add_argument('-ti', '--targetip', dest='target_ip',
+                        help='remote target IP or host name')
 
     parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
-                        help='remote target port', required=True)
+                        help='remote target port')
 
     parser.add_argument('-li', '--listenip', dest='listen_ip',
-                        default='0.0.0.0', help='IP address to listen for ' +
+                        default='0.0.0.0', help='IP address/host name to listen for ' +
                         'incoming data')
 
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
@@ -276,6 +276,14 @@ def log(handle, message, message_only=False):
 
 def main():
     args = parse_args()
+    if args.list is False:
+        if not args.target_ip:
+            print 'Target IP is required: -ti'
+            sys.exit(6)
+        if not args.target_port:
+            print 'Target port is required: -tp'
+            sys.exit(7)
+
     if args.logfile is not None:
         try:
             args.logfile = open(args.logfile, 'a', 0)  # unbuffered
@@ -293,12 +301,26 @@ def main():
         sys.exit(0)
 
     if args.listen_ip != '0.0.0.0' and not is_valid_ip4(args.listen_ip):
-        print '%s is not a valid IP address' % args.listen_ip
-        sys.exit(1)
+        try:
+            ip = socket.gethostbyname(args.listen_ip)
+        except socket.gaierror:
+            ip = False
+        if ip is False:
+            print '%s is not a valid IP address or host name' % args.listen_ip
+            sys.exit(1)
+        else:
+            args.listen_ip = ip
 
     if not is_valid_ip4(args.target_ip):
-        print '%s is not a valid IP address' % args.target_ip
-        sys.exit(2)
+        try:
+            ip = socket.gethostbyname(args.target_ip)
+        except socket.gaierror:
+            ip = False
+        if ip is False:
+            print '%s is not a valid IP address or host name' % args.target_ip
+            sys.exit(2)
+        else:
+            args.target_ip = ip
 
     if args.in_modules is not None:
         in_modules = generate_module_list(args.in_modules, True)
