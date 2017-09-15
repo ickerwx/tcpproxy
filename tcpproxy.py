@@ -69,10 +69,7 @@ def parse_args():
                         help='Print help of selected module')
 
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
-                        default=False, help='use SSL, certificate is mitm.pem')
-
-    parser.add_argument('-a', '--starttls', dest='use_starttls', action='store_true',
-                        default=False, help='use STARTTLS, certificate is mitm.pem')
+                        default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
 
     return parser.parse_args()
 
@@ -188,7 +185,7 @@ def enable_ssl(remote_socket, local_socket):
 
 
 def starttls(args, local_socket, read_sockets):
-    return (args.use_starttls and
+    return (args.use_ssl and
         local_socket in read_sockets and
         not isinstance(local_socket, ssl.SSLSocket) and
         is_client_hello(local_socket)
@@ -200,8 +197,6 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # host and the remote host, while letting modules work on the data before
     # passing it on.
     remote_socket = socket.socket()
-    if args.use_ssl:
-        remote_socket = ssl.wrap_socket(remote_socket)
 
     try:
         remote_socket.connect((args.target_ip, args.target_port))
@@ -333,12 +328,6 @@ def main():
             in_socket, in_addrinfo = proxy_socket.accept()
             if args.verbose:
                 print 'Connection from %s:%d' % in_addrinfo
-            if args.use_ssl:
-                in_socket = ssl.wrap_socket(in_socket, certfile="mitm.pem",
-                                        keyfile="mitm.pem",
-                                        do_handshake_on_connect=False,
-                                        server_side=True,
-                                        ssl_version=ssl.PROTOCOL_TLS)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))
