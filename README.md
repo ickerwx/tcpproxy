@@ -50,8 +50,7 @@ hexdump - Print a hexdump of the received data
 http_ok - Prepend HTTP response header
 http_post - Prepend HTTP header
 http_strip - Remove HTTP header from data
-java_deserializer - Deserialization of Java objects (needs jython)
-java_serializer - serialization of XStream XML data (needs jython)
+javaxml - Serialization or deserialization of Java objects (needs jython)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 replace - Replace text by using regular expressions
@@ -168,12 +167,12 @@ If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML
 ```
 The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialized objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialized into XML, fed to the tool and then serialized before sending the response to the client.
 ```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om java_deserializer,http_post -im http_strip,java_serializer -t 0.1
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om javaxml:mode=deserial,http_post -im http_strip,javaxml:mode=serial
 ```
 The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
 Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
 ```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im java_deserializer,http_post -om http_strip,java_serializer -t 3
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_post -om http_strip,javaxml:mode=serial
 ```
 This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP header, then send the data to burp.
 
@@ -183,7 +182,7 @@ If you are doing automated modifications and have no need for interactivity, you
 
 Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
 
-##Logging
+## Logging
 You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
 ## TODO
 - [X] implement a way to pass parameters to modules
