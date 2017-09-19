@@ -9,6 +9,7 @@ import ssl
 import time
 import select
 import errno
+import platform
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -20,6 +21,10 @@ def is_valid_ip4(ip):
     if len(octets) != 4:
         return False
     return octets[0] != 0 and all(0 <= int(octet) <= 255 for octet in octets)
+
+
+def is_jython():
+    return 'java' in platform.system().lower()
 
 
 def parse_args():
@@ -184,18 +189,28 @@ def is_client_hello(sock):
 
 
 def enable_ssl(remote_socket, local_socket):
+    # jython doesn't know PROTOCOL_TLS
+    protocol = ssl.PROTOCOL_SSLv23 if is_jython() else ssl.PROTOCOL_TLS
     local_socket = ssl.wrap_socket(local_socket,
                 server_side=True,
                 certfile="mitm.pem",
                 keyfile="mitm.pem",
-                ssl_version=ssl.PROTOCOL_TLS,
+                ssl_version=protocol,
+                do_handshake_on_connect=not is_jython()
               )
-
     remote_socket = ssl.wrap_socket(remote_socket)
     return [remote_socket, local_socket]
 
 
 def starttls(args, local_socket, read_sockets):
+    if is_jython():
+        # jython does not support socket.MSG_PEEK
+        # this means we can't do dynamic checks to detect STARTTLS in is_client_hello()
+        # we fall back to generally enabling TLS if args.use_ssl is True
+        return (args.use_ssl and
+                local_socket in read_sockets and
+                not isinstance(local_socket, ssl.SSLSocket)
+               )
     return (args.use_ssl and
         local_socket in read_sockets and
         not isinstance(local_socket, ssl.SSLSocket) and
@@ -237,12 +252,11 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             except ssl.SSLError as e:
                 print "SSL handshake failed", str(e)
                 break
-
             read_sockets, _, _ = select.select(ssl_sockets, [], [])
 
         for sock in read_sockets:
             data = sock.recv(4096)
-
+            print 'DEBUG: Received data:', data
             if sock == local_socket:
                 if len(data):
                     log(args.logfile, '< < < out\n' + data)
