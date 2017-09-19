@@ -62,7 +62,7 @@ Tcpproxy.py uses modules to view or modify the intercepted data. To see the poss
 
 
 class Module:
-    def __init__(self, incoming=False, options=None):
+    def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Simply print the received data as text'
@@ -96,6 +96,7 @@ if __name__ == '__main__':
 ```
 Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
 The incoming parameter in the constructor is set to True when the module is in the incoming chain (-im), otherwise it's False. This way, a module knows in which direction the data is flowing (credits to jbarg for this idea).
+The verbose parameter is set to True if the proxy is started with -v/--verbose.
 The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. This method must return a string. Use one line per option, make sure each line starts with a \t character for proper indentation.
 
 See the hexdump module for an additional options example:
@@ -104,7 +105,7 @@ See the hexdump module for an additional options example:
 
 
 class Module:
-    def __init__(self, incoming=False, options=None):
+    def __init__(self, incoming=False, verbose=False, options=None):
         # -- 8< --- snip
         self.len = 16
         if options is not None:
@@ -152,7 +153,7 @@ You can see how the first hexdump instance gets a length of 8 bytes per row and 
 ## Deserializing and Serializing Java Objects to XML
 Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
 ```
-CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om java_deserializer,textdump
+CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
 ```
 If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
 ```
@@ -172,9 +173,9 @@ $ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <bu
 The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
 Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
 ```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_post -om http_strip,javaxml:mode=serial
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_ok -om http_strip,javaxml:mode=serial
 ```
-This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP header, then send the data to burp.
+This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP response header, then send the data to burp.
 
 Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
 
@@ -187,4 +188,4 @@ You can write all data that is sent or received by the proxy to a file using the
 ## TODO
 - [X] implement a way to pass parameters to modules
 - [X] implement logging (pre-/post modification)
-- [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts)
+- [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)

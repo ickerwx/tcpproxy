@@ -3,7 +3,7 @@ import time
 
 
 class Module:
-    def __init__(self, incoming=False, options=None):
+    def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Log data in the module chain. Use in addition to general logging (-l/--log).'

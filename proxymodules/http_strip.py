@@ -2,7 +2,7 @@
 
 
 class Module:
-    def __init__(self, incoming=False, options=None):
+    def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
         self.description = 'Remove HTTP header from data'
@@ -16,8 +16,8 @@ class Module:
             return '\n' * 2
 
     def execute(self, data):
-        if data.startswith('HTTP/1.'):
-            delimiter = self.detect_linebreak(data)
+        delimiter = self.detect_linebreak(data)
+        if delimiter in data:
             data = data.split(delimiter, 1)[1]
         return data
 

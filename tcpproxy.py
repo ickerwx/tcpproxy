@@ -74,7 +74,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def generate_module_list(modstring, incoming=False):
+def generate_module_list(modstring, incoming=False, verbose=False):
     # This method receives the comma-separated module list, imports the modules
     # and creates a Module instance for each module. A list of these instances
     # is then returned.
@@ -87,7 +87,7 @@ def generate_module_list(modstring, incoming=False):
         name, options = parse_module_options(n)
         try:
             __import__('proxymodules.' + name)
-            modlist.append(sys.modules['proxymodules.' + name].Module(incoming, options))
+            modlist.append(sys.modules['proxymodules.' + name].Module(incoming, verbose, options))
         except ImportError:
             print 'Module %s not found' % name
             sys.exit(3)
@@ -135,6 +135,17 @@ def print_module_help(modlist):
             print '\tNo options.'
 
 
+def update_module_hosts(modules, source, destination):
+    # set source and destination IP/port for each module
+    # source and destination are ('IP', port) tuples
+    # this can only be done once local and remote connections have been established
+    for m in modules:
+        if hasattr(m, 'source'):
+            m.source = source
+        if hasattr(m, 'destination'):
+            m.destination = destination
+
+
 def receive_from(s, timeout):
     # receive data from a socket until no more data is there or until timeout
     b = ""
@@ -147,7 +158,7 @@ def receive_from(s, timeout):
     return b
 
 
-def handle_data(data, modules, dont_chain, verbose=False):
+def handle_data(data, modules, dont_chain):
     # execute each active module on the data. If dont_chain is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
@@ -208,6 +219,9 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         else:
             raise serr
 
+    update_module_hosts(out_modules, local_socket.getpeername(), remote_socket.getpeername())
+    update_module_hosts(in_modules, remote_socket.getpeername(), local_socket.getpeername())
+
     # This loop ends when no more data is received on either the local or the
     # remote socket
     running = True
@@ -234,7 +248,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                     log(args.logfile, '< < < out\n' + data)
                     if out_modules is not None:
                         data = handle_data(data, out_modules,
-                                               args.no_chain_modules, args.verbose)
+                                           args.no_chain_modules)
                     remote_socket.send(data)
                 else:
                     if args.verbose:
@@ -246,8 +260,8 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                 if len(data):
                     log(args.logfile, '> > > in\n' + data)
                     if in_modules is not None:
-                        in_data = handle_data(data, in_modules,
-                                              args.no_chain_modules, args.verbose)
+                        data = handle_data(data, in_modules,
+                                           args.no_chain_modules)
                     local_socket.send(data)
                 else:
                     if args.verbose:
@@ -323,12 +337,12 @@ def main():
             args.target_ip = ip
 
     if args.in_modules is not None:
-        in_modules = generate_module_list(args.in_modules, True)
+        in_modules = generate_module_list(args.in_modules, incoming=True, verbose=args.verbose)
     else:
         in_modules = None
 
     if args.out_modules is not None:
-        out_modules = generate_module_list(args.out_modules)
+        out_modules = generate_module_list(args.out_modules, incoming=False, verbose=args.verbose)
     else:
         out_modules = None
 
