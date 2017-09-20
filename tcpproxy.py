@@ -132,7 +132,7 @@ def print_module_help(modlist):
             print m.name
             print m.help()
         except AttributeError:
-            print '\tNo options.'
+            print '\tNo options or missing help() function.'
 
 
 def update_module_hosts(modules, source, destination):
@@ -212,10 +212,13 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
     try:
         remote_socket.connect((args.target_ip, args.target_port))
+        if args.verbose:
+            print 'Connected to %s:%d' % remote_socket.getpeername()
+        log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
-            print '%s:%d - Connection refused' % (args.target_ip,
-                                                  args.target_port)
+            print '%s:%d - Connection refused' % (args.target_ip, args.target_port)
+            log(args.logfile, '%s:%d - Connection refused' % (args.target_ip, args.target_port))
             return None
         else:
             raise serr
@@ -231,12 +234,14 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
         if starttls(args, local_socket, read_sockets):
             try:
-                if args.verbose:
-                    print "Enable SSL"
                 ssl_sockets = enable_ssl(remote_socket, local_socket)
                 remote_socket, local_socket = ssl_sockets
+                if args.verbose:
+                    print "SSL enabled"
+                log(args.logfile, "SSL enabled")
             except ssl.SSLError as e:
                 print "SSL handshake failed", str(e)
+                log(args.logfile, "SSL handshake failed", str(e))
                 break
 
             read_sockets, _, _ = select.select(ssl_sockets, [], [])
@@ -244,6 +249,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         for sock in read_sockets:
             peer = sock.getpeername()
             data = receive_from(sock)
+            log(args.logfile, 'Received %d bytes' % len(data))
 
             if sock == local_socket:
                 if len(data):
@@ -257,6 +263,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                 else:
                     if args.verbose:
                         print "Connection from local client %s:%d closed" % peer
+                    log(args.logfile, "Connection from local client %s:%d closed" % peer)
                     remote_socket.close()
                     running = False
                     break
@@ -272,6 +279,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                 else:
                     if args.verbose:
                         print "Connection to remote server %s:%d closed" % peer
+                    log(args.logfile, "Connection to remote server %s:%d closed" % peer)
                     local_socket.close()
                     running = False
                     break
@@ -370,10 +378,11 @@ def main():
             in_socket, in_addrinfo = proxy_socket.accept()
             if args.verbose:
                 print 'Connection from %s:%d' % in_addrinfo
+            log(args.logfile, 'Connection from %s:%d' % in_addrinfo)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
                                                   out_modules))
-            log(args.logfile, "Starting proxy thread")
+            log(args.logfile, "Starting proxy thread " + proxy_thread.name)
             proxy_thread.start()
     except KeyboardInterrupt:
         log(args.logfile, 'Ctrl+C detected, exiting...')
