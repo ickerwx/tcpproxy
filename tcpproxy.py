@@ -139,17 +139,17 @@ def update_module_hosts(modules, source, destination):
     # set source and destination IP/port for each module
     # source and destination are ('IP', port) tuples
     # this can only be done once local and remote connections have been established
-    for m in modules:
-        if hasattr(m, 'source'):
-            m.source = source
-        if hasattr(m, 'destination'):
-            m.destination = destination
+    if modules is not None:
+        for m in modules:
+            if hasattr(m, 'source'):
+                m.source = source
+            if hasattr(m, 'destination'):
+                m.destination = destination
 
 
-def receive_from(s, timeout):
-    # receive data from a socket until no more data is there or until timeout
+def receive_from(s):
+    # receive data from a socket until no more data is there
     b = ""
-    #  s.settimeout(timeout)
     while True:
         data = s.recv(4096)
         b += data
@@ -158,12 +158,13 @@ def receive_from(s, timeout):
     return b
 
 
-def handle_data(data, modules, dont_chain):
+def handle_data(data, modules, dont_chain, incoming, verbose):
     # execute each active module on the data. If dont_chain is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
-        print ("> > > > in: " if m.incoming else "< < < < out: ") + m.name
+        if verbose:
+            print ("> > > > in: " if incoming else "< < < < out: ") + m.name
         if dont_chain:
             m.execute(data)
         else:
@@ -241,18 +242,21 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             read_sockets, _, _ = select.select(ssl_sockets, [], [])
 
         for sock in read_sockets:
-            data = sock.recv(4096)
+            peer = sock.getpeername()
+            data = receive_from(sock)
 
             if sock == local_socket:
                 if len(data):
                     log(args.logfile, '< < < out\n' + data)
                     if out_modules is not None:
                         data = handle_data(data, out_modules,
-                                           args.no_chain_modules)
+                                           args.no_chain_modules,
+                                           False,  # incoming data?
+                                           args.verbose)
                     remote_socket.send(data)
                 else:
                     if args.verbose:
-                        print "Connection closed"
+                        print "Connection from local client %s:%d closed" % peer
                     remote_socket.close()
                     running = False
                     break
@@ -261,20 +265,22 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                     log(args.logfile, '> > > in\n' + data)
                     if in_modules is not None:
                         data = handle_data(data, in_modules,
-                                           args.no_chain_modules)
+                                           args.no_chain_modules,
+                                           True,  # incoming data?
+                                           args.verbose)
                     local_socket.send(data)
                 else:
                     if args.verbose:
-                        print "Connection closed"
+                        print "Connection to remote server %s:%d closed" % peer
                     local_socket.close()
                     running = False
                     break
 
 
 def log(handle, message, message_only=False):
-    # if message_onlz is True, only the message will be logged
+    # if message_only is True, only the message will be logged
     # otherwise the message will be prefixed with a timestamp and a line is
-    # written after the message to make the log file easier to write
+    # written after the message to make the log file easier to read
     if handle is None:
         return
     if not message_only:
