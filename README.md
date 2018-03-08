@@ -151,7 +151,10 @@ python2 tcpproxy.py -om hexdump:length=8,http_post,hexdump:length=12 -ti 127.0.0
 ```
 You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes. To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
 ## Deserializing and Serializing Java Objects to XML
+**Note: at present this does not work due to changes that made the code not compatible with Jython's `socket` implementation. If Java deserialization is what you are looking for: the last compatible commit is e3290261.**
+
 Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
+
 ```
 CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
 ```
@@ -186,6 +189,5 @@ Note that when using jython, the SSL mitm does not seem to work. It looks like a
 ## Logging
 You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
 ## TODO
-- [X] implement a way to pass parameters to modules
-- [X] implement logging (pre-/post modification)
 - [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)
+- [ ] Create and maintain a parallel branch that is compatible with jython but also has most of the new stuff introduced after e3290261
