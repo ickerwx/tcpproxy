@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-from distutils.utils import strtobool
+from distutils.util import strtobool
 
 class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
@@ -25,7 +25,7 @@ class Module:
         return data
 
 
-   def help(self):
+    def help(self):
         h = '\tverbose: override the global verbosity setting'
         return h
 
