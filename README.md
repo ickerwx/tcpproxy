@@ -46,6 +46,7 @@ You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1
 ## Modules
 ```
 $ ./tcpproxy.py --list
+filereplace - Replace text on the fly by using regular expressions in files
 hexdump - Print a hexdump of the received data
 http_ok - Prepend HTTP response header
 http_post - Prepend HTTP header
