@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import os
 import re
 
 
@@ -7,21 +8,55 @@ class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
-        self.description = 'Replace text by using regular expressions'
+        self.description = 'Replace text on the fly by using regular expressions in files'
         self.incoming = incoming  # incoming means module is on -im chain
+        self.find = None  # if find is not None, this text will be highlighted
         if options is not None:
             self.search = options['search']
             self.replace = options['replace']
+            try:
+                f = open(self.search)
+            except IOError:
+                print("Search file not found. Use string '%s' for search string." % (self.search))
+            try:
+                open(self.replace)
+            except IOError:
+                print("Replace file not found. Use string '%s' for replace string." % (self.replace))
 
     def execute(self, data):
-        new_data = re.sub(self.search, self.replace, data)
+        '''
+        If the argument is a text file in the current directory, then the content
+        of the file will be used as search_string / replace_string.
+        Otherwise the argument itself is the search_string / replace_string.
+        '''
+        listdir = os.listdir(".")
+
+        try:
+            f = open(self.replace,"r")
+            replace_string = f.read()[:-1]
+            f.close()
+        except IOError:
+            replace_string = self.replace
+
+        try:
+            f = open(self.search,"r")
+            search_string = f.read()[:-1]
+            f.close()
+        except IOError:
+            search_string = self.search
+            
+        results = re.findall(search_string, data)
+        new_data = re.sub(search_string, replace_string, data)
         if not new_data == data:
-            print("Replacing '%s' with '%s'" % (self.search, self.replace))
+            for finding in results:
+                print("Replacing '%s' with '%s'" % (finding, replace_string))
         return new_data
 
     def help(self):
-        h = '\tsearch: string that should be replaced\n'
-        h += ('\treplace: value that it should be replaced with')
+        h = '\tsearch: file which contains regular expression that should be replaced\n'
+        h += ('\treplace: file which contains the replacing string\n')
+        h += ('\tExample: replace:search=searchstring.txt,replace=replacestring.txt\n')
+        h += ('\tIf searchstring.txt or replacestring.txt do not exist, then the filename itself will be used as regex resp. replace string')
         return h
 
 
