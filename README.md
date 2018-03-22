@@ -53,7 +53,7 @@ http_strip - Remove HTTP header from data
 javaxml - Serialization or deserialization of Java objects (needs jython)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
-replace - Replace text by using regular expressions
+replace - Replace text on the fly by using regular expressions in files
 textdump - Simply print the received data as text
 ```
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
