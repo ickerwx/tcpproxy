@@ -13,6 +13,7 @@ class Module:
         self.search = None
         self.replace = None
         self.filename = None
+        self.delimeter = ':'
 
         if options is not None:
             if 'search' in options.keys():
@@ -26,6 +27,8 @@ class Module:
                 except IOError as ioe:
                     print "Error opening %s: %s" % (self.filename, ioe.strerror)
                     self.filename = None
+            if 'delimeter' in options.keys():
+                self.delimeter = options['delimeter']
 
     def execute(self, data):
         pairs = []  # list of (search, replace) tuples
@@ -34,9 +37,8 @@ class Module:
 
         if self.filename is not None:
             for line in open(self.filename).readlines():
-                # TODO: handle escaping of : character
                 try:
-                    search, replace = line.split(':', 1)
+                    search, replace = line.split(self.delimeter, 1)
                     pairs.append((search.strip(), replace.strip()))
                 except ValueError:
                     # line does not contain : and will be ignored
