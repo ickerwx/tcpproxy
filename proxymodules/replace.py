@@ -13,7 +13,7 @@ class Module:
         self.search = None
         self.replace = None
         self.filename = None
-        self.delimeter = ':'
+        self.separator = ':'
 
         if options is not None:
             if 'search' in options.keys():
@@ -27,8 +27,8 @@ class Module:
                 except IOError as ioe:
                     print "Error opening %s: %s" % (self.filename, ioe.strerror)
                     self.filename = None
-            if 'delimeter' in options.keys():
-                self.delimeter = options['delimeter']
+            if 'separator' in options.keys():
+                self.separator = options['separator']
 
     def execute(self, data):
         pairs = []  # list of (search, replace) tuples
@@ -38,7 +38,7 @@ class Module:
         if self.filename is not None:
             for line in open(self.filename).readlines():
                 try:
-                    search, replace = line.split(self.delimeter, 1)
+                    search, replace = line.split(self.separator, 1)
                     pairs.append((search.strip(), replace.strip()))
                 except ValueError:
                     # line does not contain : and will be ignored
@@ -55,6 +55,7 @@ class Module:
         h = '\tsearch: string or regular expression to search for\n'
         h += ('\treplace: string the search string should be replaced with\n')
         h += ('\tfile: file containing search:replace pairs, one per line\n')
+        h += ('\tseparator: define a custom search:replace separator in the file, e.g. search#replace\n')
         h += ('\n\tUse at least file or search and replace (or both).\n')
         return h
 
