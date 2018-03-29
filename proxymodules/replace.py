@@ -8,55 +8,52 @@ class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = __file__.rsplit('/', 1)[1].split('.')[0]
-        self.description = 'Replace text on the fly by using regular expressions in files'
-        self.incoming = incoming  # incoming means module is on -im chain
-        self.find = None  # if find is not None, this text will be highlighted
+        self.description = 'Replace text on the fly by using regular expressions in a file or as module parameters'
+        self.verbose = verbose
+        self.search = None
+        self.replace = None
+        self.filename = None
+
         if options is not None:
-            self.search = options['search']
-            self.replace = options['replace']
-            try:
-                f = open(self.search)
-            except IOError:
-                print("Search file not found. Use string '%s' for search string." % (self.search))
-            try:
-                open(self.replace)
-            except IOError:
-                print("Replace file not found. Use string '%s' for replace string." % (self.replace))
+            if 'search' in options.keys():
+                self.search = options['search']
+            if 'replace' in options.keys():
+                self.replace = options['replace']
+            if 'file' in options.keys():
+                self.filename = options['file']
+                try:
+                    open(self.filename)
+                except IOError as ioe:
+                    print "Error opening %s: %s" % (self.filename, ioe.strerror)
+                    self.filename = None
 
     def execute(self, data):
-        '''
-        If the argument is a text file in the current directory, then the content
-        of the file will be used as search_string / replace_string.
-        Otherwise the argument itself is the search_string / replace_string.
-        '''
-        listdir = os.listdir(".")
+        pairs = []  # list of (search, replace) tuples
+        if self.search is not None and self.replace is not None:
+            pairs.append((self.search, self.replace))
 
-        try:
-            f = open(self.replace,"r")
-            replace_string = f.read()[:-1]
-            f.close()
-        except IOError:
-            replace_string = self.replace
+        if self.filename is not None:
+            for line in open(self.filename).readlines():
+                # TODO: handle escaping of : character
+                try:
+                    search, replace = line.split(':', 1)
+                    pairs.append((search.strip(), replace.strip()))
+                except ValueError:
+                    # line does not contain : and will be ignored
+                    pass
 
-        try:
-            f = open(self.search,"r")
-            search_string = f.read()[:-1]
-            f.close()
-        except IOError:
-            search_string = self.search
-            
-        results = re.findall(search_string, data)
-        new_data = re.sub(search_string, replace_string, data)
-        if not new_data == data:
-            for finding in results:
-                print("Replacing '%s' with '%s'" % (finding, replace_string))
-        return new_data
+        old_data = data
+        for search, replace in pairs:
+            # TODO: verbosity
+            data = re.sub(search, replace, data)
+
+        return data
 
     def help(self):
-        h = '\tsearch: file which contains regular expression that should be replaced\n'
-        h += ('\treplace: file which contains the replacing string\n')
-        h += ('\tExample: replace:search=searchstring.txt,replace=replacestring.txt\n')
-        h += ('\tIf searchstring.txt or replacestring.txt do not exist, then the filename itself will be used as regex resp. replace string')
+        h = '\tsearch: string or regular expression to search for\n'
+        h += ('\treplace: string the search string should be replaced with\n')
+        h += ('\tfile: file containing search:replace pairs, one per line\n')
+        h += ('\n\tUse at least file or search and replace (or both).\n')
         return h
 
 
