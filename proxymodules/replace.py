@@ -7,7 +7,7 @@ import re
 class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
-        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
+        self.name = os.path.splitext(os.path.basename(__file__))[0]
         self.description = 'Replace text on the fly by using regular expressions in a file or as module parameters'
         self.verbose = verbose
         self.search = None

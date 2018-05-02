@@ -1,10 +1,11 @@
 #!/usr/bin/env python2
+import os.path as path
 from distutils.util import strtobool
 
 class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
-        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
+        self.name = path.splitext(path.basename(__file__))[0]
         self.description = 'Print the size of the data passed to the module'
         self.verbose = verbose
         self.source = None

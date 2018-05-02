@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
+import os.path as path
 import platform
 if 'java' in platform.system().lower():
     import java.io as io
@@ -11,7 +12,7 @@ class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         self.is_jython = 'java' in platform.system().lower()
         # extract the file name from __file__. __file__ is proxymodules/name.py
-        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
+        self.name = path.splitext(path.basename(__file__))[0]
         self.description = 'Serialization or deserialization of Java objects' if self.is_jython else \
                            'Serialization or deserialization of Java objects (needs jython)'
         self.incoming = incoming  # incoming means module is on -im chain

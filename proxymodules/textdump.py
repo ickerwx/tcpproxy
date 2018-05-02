@@ -1,10 +1,11 @@
 #!/usr/bin/env python2
+import os.path as path
 
 
 class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
-        self.name = __file__.rsplit('/', 1)[1].split('.')[0]
+        self.name = path.splitext(path.basename(__file__))[0]
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
         self.find = None  # if find is not None, this text will be highlighted
