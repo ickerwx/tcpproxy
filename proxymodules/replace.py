@@ -44,7 +44,6 @@ class Module:
                     # line does not contain : and will be ignored
                     pass
 
-        old_data = data
         for search, replace in pairs:
             # TODO: verbosity
             data = re.sub(search, replace, data)
