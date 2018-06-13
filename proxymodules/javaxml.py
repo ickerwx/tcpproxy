@@ -63,13 +63,14 @@ class Module:
 
             # I had a problem with signed vs. unsigned bytes, hence the & 0xff
             return "".join([chr(x & 0xff) for x in bos.toByteArray().tolist()])
-        except  Exception as e:
+        except Exception as e:
             print '[!] Caught Exception. Could not convert.\n'
             return data
 
     def error(self, data):
         print '[!] Unknown mode. Please specify mode=[serial|deserial].'
         return data
+
 
 if __name__ == '__main__':
     print 'This module is not supposed to be executed alone!'

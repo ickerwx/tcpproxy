@@ -153,7 +153,7 @@ def receive_from(s):
     while True:
         data = s.recv(4096)
         b += data
-        if not data or len(data)<4096:
+        if not data or len(data) < 4096:
             break
     return b
 
@@ -176,21 +176,21 @@ def is_client_hello(sock):
     firstbytes = sock.recv(128, socket.MSG_PEEK)
     return (len(firstbytes) >= 3 and
             firstbytes[0] == "\x16" and
-            firstbytes[1:3] in [ "\x03\x00",
-                                 "\x03\x01",
-                                 "\x03\x02",
-                                 "\x03\x03",
-                                 "\x02\x00", ]
-        )
+            firstbytes[1:3] in ["\x03\x00",
+                                "\x03\x01",
+                                "\x03\x02",
+                                "\x03\x03",
+                                "\x02\x00"]
+            )
 
 
 def enable_ssl(remote_socket, local_socket):
     local_socket = ssl.wrap_socket(local_socket,
-                server_side=True,
-                certfile="mitm.pem",
-                keyfile="mitm.pem",
-                ssl_version=ssl.PROTOCOL_TLS,
-              )
+                                   server_side=True,
+                                   certfile="mitm.pem",
+                                   keyfile="mitm.pem",
+                                   ssl_version=ssl.PROTOCOL_TLS,
+                                   )
 
     remote_socket = ssl.wrap_socket(remote_socket)
     return [remote_socket, local_socket]
@@ -198,10 +198,10 @@ def enable_ssl(remote_socket, local_socket):
 
 def starttls(args, local_socket, read_sockets):
     return (args.use_ssl and
-        local_socket in read_sockets and
-        not isinstance(local_socket, ssl.SSLSocket) and
-        is_client_hello(local_socket)
-       )
+            local_socket in read_sockets and
+            not isinstance(local_socket, ssl.SSLSocket) and
+            is_client_hello(local_socket)
+            )
 
 
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
@@ -293,7 +293,7 @@ def log(handle, message, message_only=False):
         return
     if not message_only:
         logentry = "%s %s\n" % (time.strftime('%Y%m%d-%H%M%S'),
-                                 str(time.time()))
+                                str(time.time()))
     else:
         logentry = ''
     logentry += message

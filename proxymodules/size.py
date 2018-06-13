@@ -2,6 +2,7 @@
 import os.path as path
 from distutils.util import strtobool
 
+
 class Module:
     def __init__(self, incoming=False, verbose=False, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
@@ -15,16 +16,14 @@ class Module:
             if 'verbose' in options.keys():
                 self.verbose = bool(strtobool(options['verbose']))
 
-
     def execute(self, data):
         size = len(data)
-        msg = "Received %d bytes" %size
+        msg = "Received %d bytes" % size
         if self.verbose:
             msg += " from %s:%d" % self.source
             msg += " for %s:%d" % self.destination
         print msg
         return data
-
 
     def help(self):
         h = '\tverbose: override the global verbosity setting'

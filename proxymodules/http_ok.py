@@ -15,7 +15,6 @@ class Module:
         # source will be set by the proxy thread later on
         self.source = None
 
-
     def execute(self, data):
         if self.server is None:
             self.server = self.source[0]

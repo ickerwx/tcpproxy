@@ -32,5 +32,6 @@ class Module:
         print b'\n'.join(result)
         return data
 
+
 if __name__ == '__main__':
     print 'This module is not supposed to be executed alone!'
