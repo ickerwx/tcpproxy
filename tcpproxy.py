@@ -163,8 +163,7 @@ def handle_data(data, modules, dont_chain, incoming, verbose):
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
-        if verbose:
-            print ("> > > > in: " if incoming else "< < < < out: ") + m.name
+        vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, verbose)
         if dont_chain:
             m.execute(data)
         else:
@@ -185,14 +184,23 @@ def is_client_hello(sock):
 
 
 def enable_ssl(remote_socket, local_socket):
-    local_socket = ssl.wrap_socket(local_socket,
-                                   server_side=True,
-                                   certfile="mitm.pem",
-                                   keyfile="mitm.pem",
-                                   ssl_version=ssl.PROTOCOL_TLS,
-                                   )
+    try:
+        local_socket = ssl.wrap_socket(local_socket,
+                                       server_side=True,
+                                       certfile="mitm.pem",
+                                       keyfile="mitm.pem",
+                                       ssl_version=ssl.PROTOCOL_TLS,
+                                       )
+    except ssl.SSLError as e:
+        print "SSL handshake failed for listening socket", str(e)
+        raise
 
-    remote_socket = ssl.wrap_socket(remote_socket)
+    try:
+        remote_socket = ssl.wrap_socket(remote_socket)
+    except ssl.SSLError as e:
+        print "SSL handshake failed for remote socket", str(e)
+        raise
+
     return [remote_socket, local_socket]
 
 
@@ -212,8 +220,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
     try:
         remote_socket.connect((args.target_ip, args.target_port))
-        if args.verbose:
-            print 'Connected to %s:%d' % remote_socket.getpeername()
+        vprint('Connected to %s:%d' % remote_socket.getpeername(), args.verbose)
         log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
@@ -236,8 +243,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             try:
                 ssl_sockets = enable_ssl(remote_socket, local_socket)
                 remote_socket, local_socket = ssl_sockets
-                if args.verbose:
-                    print "SSL enabled"
+                vprint("SSL enabled", args.verbose)
                 log(args.logfile, "SSL enabled")
             except ssl.SSLError as e:
                 print "SSL handshake failed", str(e)
@@ -261,8 +267,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                                            args.verbose)
                     remote_socket.send(data)
                 else:
-                    if args.verbose:
-                        print "Connection from local client %s:%d closed" % peer
+                    vprint("Connection from local client %s:%d closed" % peer, args.verbose)
                     log(args.logfile, "Connection from local client %s:%d closed" % peer)
                     remote_socket.close()
                     running = False
@@ -277,8 +282,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                                            args.verbose)
                     local_socket.send(data)
                 else:
-                    if args.verbose:
-                        print "Connection to remote server %s:%d closed" % peer
+                    vprint("Connection to remote server %s:%d closed" % peer, args.verbose)
                     log(args.logfile, "Connection to remote server %s:%d closed" % peer)
                     local_socket.close()
                     running = False
@@ -300,6 +304,12 @@ def log(handle, message, message_only=False):
     if not message_only:
         logentry += '\n' + '-' * 20 + '\n'
     handle.write(logentry)
+
+
+def vprint(msg, is_verbose):
+    # this will print msg, but only if is_verbose is True
+    if is_verbose:
+        print msg
 
 
 def main():
@@ -376,8 +386,7 @@ def main():
     try:
         while True:
             in_socket, in_addrinfo = proxy_socket.accept()
-            if args.verbose:
-                print 'Connection from %s:%d' % in_addrinfo
+            vprint('Connection from %s:%d' % in_addrinfo, args.verbose)
             log(args.logfile, 'Connection from %s:%d' % in_addrinfo)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(in_socket, args, in_modules,
