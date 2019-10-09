@@ -199,3 +199,12 @@ You can write all data that is sent or received by the proxy to a file using the
 ## TODO
 - [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)
 - [ ] Create and maintain a parallel branch that is compatible with jython but also has most of the new stuff introduced after e3290261
+
+## Contributions
+
+I want to thank the following people for spending their valuable time and energy on improving this little tool:
+
+- [Adrian Vollmer](https://github.com/AdrianVollmer)
+- [Michael Füllbier](https://github.com/mfuellbier)
+- [Stefan Grönke](https://github.com/gronke)
+- [Mattia](https://github.com/sowdust)
