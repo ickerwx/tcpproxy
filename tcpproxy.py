@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import socket
+import socks
 import ssl
 import time
 import select
@@ -42,6 +43,15 @@ def parse_args():
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
                         default=8080, help='port to listen on')
 
+    parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
+                        help='IP address/host name of proxy')
+    
+    parser.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
+                        default=1080, help='proxy port', )
+    
+    parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
+                        help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
+    
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
                              ' before sending to remote target.')
@@ -67,6 +77,7 @@ def parse_args():
 
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
                         help='Print help of selected module')
+
 
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
                         default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
@@ -211,12 +222,15 @@ def starttls(args, local_socket, read_sockets):
             is_client_hello(local_socket)
             )
 
-
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
     # passing it on.
-    remote_socket = socket.socket()
+    remote_socket = socks.socksocket()
+
+    if args.proxy_ip:
+        proxy_types = {'SOCKS5' : socks.SOCKS5, 'SOCKS4' : socks.SOCKS4, 'HTTP' : socks.HTTP}
+        remote_socket.set_proxy(proxy_types[args.proxy_type], args.proxy_ip, args.proxy_port)
 
     try:
         remote_socket.connect((args.target_ip, args.target_port))

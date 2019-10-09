@@ -7,9 +7,11 @@ This tool is inspired by and partially based on the TCP proxy example used in Ju
 ## Usage
 ```
 $ ./tcpproxy.py -h
-usage: tcpproxy.py [-h] -ti TARGET_IP -tp TARGET_PORT [-li LISTEN_IP]
-                   [-lp LISTEN_PORT] [-om OUT_MODULES] [-im IN_MODULES] [-v]
-                   [-n] [-l LOGFILE] [--list] [-lo HELP_MODULES] [-s]
+usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP]
+                   [-lp LISTEN_PORT] [-pi PROXY_IP] [-pp PROXY_PORT]
+                   [-pt {SOCKS4,SOCKS5,HTTP}] [-om OUT_MODULES]
+                   [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list]
+                   [-lo HELP_MODULES] [-s]
 
 Simple TCP proxy for data interception and modification. Select modules to
 handle the intercepted traffic.
@@ -17,13 +19,19 @@ handle the intercepted traffic.
 optional arguments:
   -h, --help            show this help message and exit
   -ti TARGET_IP, --targetip TARGET_IP
-                        remote target IP
+                        remote target IP or host name
   -tp TARGET_PORT, --targetport TARGET_PORT
                         remote target port
   -li LISTEN_IP, --listenip LISTEN_IP
-                        IP address to listen for incoming data
+                        IP address/host name to listen for incoming data
   -lp LISTEN_PORT, --listenport LISTEN_PORT
                         port to listen on
+  -pi PROXY_IP, --proxy-ip PROXY_IP
+                        IP address/host name of proxy
+  -pp PROXY_PORT, --proxy-port PROXY_PORT
+                        proxy port
+  -pt {SOCKS4,SOCKS5,HTTP}, --proxy-type {SOCKS4,SOCKS5,HTTP}
+                        proxy type. Options are SOCKS5 (default), SOCKS4, HTTP
   -om OUT_MODULES, --outmodules OUT_MODULES
                         comma-separated list of modules to modify data before
                         sending to remote target.
