@@ -10,6 +10,7 @@ class Module:
         self.incoming = incoming  # incoming means module is on -im chain
         self.size = 2392  # if a response has this value as content-length, it will become a 404
         self.verbose = False
+        self.custom = False
         if options is not None:
             if 'size' in options.keys():
                 try:
@@ -18,17 +19,31 @@ class Module:
                     pass  # use the default if you can't parse the parameter
             if 'verbose' in options.keys():
                 self.verbose=True
+            if 'custom' in options.keys():
+                try:
+                    with open(options['custom'], 'r') as handle:
+                        self.custom = handle.read()
+                except Exception as e:
+                    print 'Can\'t open custom error file, not using it.'
+                    self.custom = False
 
 
     def execute(self, data):
         contentlength = 'content-length: ' + str(self.size)
         if data.startswith('HTTP/1.1 200 OK') and contentlength in data.lower():
-            data = data.replace('200 OK', '404 Not Found', 1)
-            print 'Edited return code'
+            if self.custom is not False:
+                data = self.custom
+                print 'Replaced response with custom response'
+            else:
+                data = data.replace('200 OK', '404 Not Found', 1)
+                print 'Edited return code'
         return data
 
     def help(self):
-        return '\tsize: if a response has this value as content-length, it will become a 404\n\tverbose: print a message if a string is replaced'
+        h = '\tsize: if a response has this value as content-length, it will become a 404\n'
+        h += ('\tverbose: print a message if a string is replaced\n'
+              '\tcustom: path to a file containing a custom response, will replace the received response')
+        return h
 
 
 if __name__ == '__main__':
