@@ -200,7 +200,7 @@ def enable_ssl(remote_socket, local_socket):
                                        server_side=True,
                                        certfile="mitm.pem",
                                        keyfile="mitm.pem",
-                                       ssl_version=ssl.PROTOCOL_TLS,
+                                       ssl_version=ssl.PROTOCOL_TLSv1_2,
                                        )
     except ssl.SSLError as e:
         print "SSL handshake failed for listening socket", str(e)
