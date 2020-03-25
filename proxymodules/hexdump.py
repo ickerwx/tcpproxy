@@ -29,7 +29,7 @@ class Module:
                 AttributeError
                 hexa = " ".join(["%0*X" % (digits, ord(x)) for x in s])
             try:            
-                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s.decode("ascii")]))
+                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s.decode("ascii")])
             except:
                 AttributeError
                 text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s])
