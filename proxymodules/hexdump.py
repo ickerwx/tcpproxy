@@ -20,16 +20,21 @@ class Module:
         # this is a pretty hex dumping function directly taken from
         # http://code.activestate.com/recipes/142812-hex-dumper/
         result = []
-        digits = 4 if isinstance(data, unicode) else 2
-
-        for i in xrange(0, len(data), self.len):
+        digits = 4 if isinstance(data, str) else 2
+        for i in range(0, len(data), self.len):
             s = data[i:i + self.len]
-            hexa = b' '.join(["%0*X" % (digits, ord(x)) for x in s])
-            text = b''.join([x if 0x20 <= ord(x) < 0x7F else b'.' for x in s])
-            result.append(b"%04X   %-*s   %s" % (i, self.len * (digits + 1),
-                          hexa, text))
-
-        print (b'\n'.join(result))
+            try:
+                hexa = " ".join(["%0*X" % (digits, ord(x)) for x in s.decode("ascii")])
+            except:
+                AttributeError
+                hexa = " ".join(["%0*X" % (digits, ord(x)) for x in s])
+            try:            
+                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s.decode("ascii")]))
+            except:
+                AttributeError
+                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s])
+            result.append("%04X   %-*s   %s" % (i, self.len * (digits + 1), hexa, text))
+        print("\n".join(result))
         return data
 
 

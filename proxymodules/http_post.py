@@ -29,7 +29,7 @@ class Module:
 
         http += "Connection: keep-alive\r\n"
         http += "Content-Length: %d\r\n" % len(data)
-        return http + "\r\n" + data
+        return http + "\r\n" + str(data)
 
     def help(self):
         h = '\thost: remote target, used in request URL and Host header\n'

@@ -160,7 +160,7 @@ def update_module_hosts(modules, source, destination):
 
 def receive_from(s):
     # receive data from a socket until no more data is there
-    b = ""
+    b = b""
     while True:
         data = s.recv(4096)
         b += data
@@ -273,13 +273,13 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
             if sock == local_socket:
                 if len(data):
-                    log(args.logfile, '< < < out\n' + data)
+                    log(args.logfile, '< < < out\n' + str(data))
                     if out_modules is not None:
                         data = handle_data(data, out_modules,
                                            args.no_chain_modules,
                                            False,  # incoming data?
                                            args.verbose)
-                    remote_socket.send(data)
+                    remote_socket.send(data.encode())
                 else:
                     vprint("Connection from local client %s:%d closed" % peer, args.verbose)
                     log(args.logfile, "Connection from local client %s:%d closed" % peer)
@@ -288,7 +288,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                     break
             elif sock == remote_socket:
                 if len(data):
-                    log(args.logfile, '> > > in\n' + data)
+                    log(args.logfile, '> > > in\n' + str(data))
                     if in_modules is not None:
                         data = handle_data(data, in_modules,
                                            args.no_chain_modules,
