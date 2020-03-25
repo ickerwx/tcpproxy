@@ -23,16 +23,8 @@ class Module:
         digits = 4 if isinstance(data, str) else 2
         for i in range(0, len(data), self.len):
             s = data[i:i + self.len]
-            try:
-                hexa = " ".join(["%0*X" % (digits, ord(x)) for x in s.decode("ascii")])
-            except:
-                AttributeError
-                hexa = " ".join(["%0*X" % (digits, ord(x)) for x in s])
-            try:            
-                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s.decode("ascii")])
-            except:
-                AttributeError
-                text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in s])
+            hexa = " ".join(["%0*X" % (digits, ord(x)) for x in str(s)])
+            text =  "".join([x if 0x20 <= ord(x) < 0x7F else "." for x in str(s)])
             result.append("%04X   %-*s   %s" % (i, self.len * (digits + 1), hexa, text))
         print("\n".join(result))
         return data
