@@ -15,7 +15,7 @@ class Module:
     def execute(self, data):
         try:
             # split at \r\n\r\n to split the request into header and body
-            header, body = data.split('\r\n\r\n', 1)
+            header, body = data.decode().split('\r\n\r\n', 1)
         except ValueError:
             # no \r\n\r\n, so probably not HTTP, we can go now
             return data
@@ -23,6 +23,7 @@ class Module:
         headers = header.split('\r\n')
 
         for h in headers:
+            print(h)
             if h.lower().startswith('accept-encoding:') and 'gzip' in h:
                 headers[headers.index(h)] = h.replace('gzip', 'booo')
                 break
