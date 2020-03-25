@@ -279,7 +279,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                                            args.no_chain_modules,
                                            False,  # incoming data?
                                            args.verbose)
-                    remote_socket.send(data.encode())
+                    remote_socket.send(data.encode() if isinstance(data, str) else data)    
                 else:
                     vprint("Connection from local client %s:%d closed" % peer, args.verbose)
                     log(args.logfile, "Connection from local client %s:%d closed" % peer)
