@@ -25,7 +25,7 @@ class Module:
                 try:
                     open(self.filename)
                 except IOError as ioe:
-                    print "Error opening %s: %s" % (self.filename, ioe.strerror)
+                    print ("Error opening %s: %s" % (self.filename, ioe.strerror))
                     self.filename = None
             if 'separator' in options.keys():
                 self.separator = options['separator']
@@ -60,4 +60,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
