@@ -19,10 +19,10 @@ class Module:
 
     def execute(self, data):
         if self.find is None:
-            print data
+            print (data)
         else:
             pdata = data.replace(self.find, self.color + self.find + '\033[0m')
-            print pdata
+            print (pdata)
         return data
 
     def help(self):
@@ -33,4 +33,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
