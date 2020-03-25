@@ -25,7 +25,7 @@ class Module:
     def execute(self, data):
         if self.handle is None:
             self.handle = open(self.file, 'w', 0)  # unbuffered
-            print 'Logging to file', self.file
+            print ('Logging to file', self.file)
         logentry = time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n'
         logentry += data
         logentry += '-' * 20 + '\n'
@@ -38,4 +38,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
