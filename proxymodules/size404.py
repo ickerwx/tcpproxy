@@ -24,7 +24,7 @@ class Module:
                     with open(options['custom'], 'r') as handle:
                         self.custom = handle.read()
                 except Exception as e:
-                    print 'Can\'t open custom error file, not using it.'
+                    print ('Can\'t open custom error file, not using it.')
                     self.custom = False
 
 
@@ -33,10 +33,10 @@ class Module:
         if data.startswith('HTTP/1.1 200 OK') and contentlength in data.lower():
             if self.custom is not False:
                 data = self.custom
-                print 'Replaced response with custom response'
+                print ('Replaced response with custom response')
             else:
                 data = data.replace('200 OK', '404 Not Found', 1)
-                print 'Edited return code'
+                print ('Edited return code')
         return data
 
     def help(self):
@@ -47,4 +47,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
