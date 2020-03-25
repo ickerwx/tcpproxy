@@ -66,7 +66,7 @@ textdump - Simply print the received data as text
 ```
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
 ```python
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 
 class Module:
@@ -109,7 +109,7 @@ The options parameter is a dictionary with the keys and values passed to the mod
 
 See the hexdump module for an additional options example:
 ```python
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 
 class Module:
