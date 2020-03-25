@@ -196,6 +196,23 @@ Note that when using jython, the SSL mitm does not seem to work. It looks like a
 
 ## Logging
 You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
+
+## Replace
+Replace text on the fly by using regular expressions in a file or as module parameters
+
+Module parameters example:
+```
+python tcpproxy.py -ti <TARGET_IP> -tp <TARGET_PORT> -om replace:search=<original_value>:replace=<replaced_value>
+```
+
+You can also use a file for this separator can be left out if you use the default value of ":" :
+```
+python tcpproxy.py -ti <TARGET_IP> -tp <TARGET_PORT> -om replace:file=<filename>:separator=""<separator>""
+```
+the file file must look like:
+
+<original_value><separator><replaced_value>
+
 ## TODO
 - [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)
 - [ ] Create and maintain a parallel branch that is compatible with jython but also has most of the new stuff introduced after e3290261

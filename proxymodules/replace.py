@@ -45,7 +45,7 @@ class Module:
 
         for search, replace in pairs:
             # TODO: verbosity
-            data = re.sub(search, replace, data)
+            data = re.sub(search, replace, str(data))
 
         return data
 

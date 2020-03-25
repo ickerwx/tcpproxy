@@ -10,7 +10,7 @@ class Module:
         self.incoming = incoming  # incoming means module is on -im chain
 
     def detect_linebreak(self, data):
-        line = data.split('\n', 1)[0]
+        line = str(data).split('\n', 1)[0]
         if line.endswith('\r'):
             return '\r\n' * 2
         else:
@@ -18,8 +18,8 @@ class Module:
 
     def execute(self, data):
         delimiter = self.detect_linebreak(data)
-        if delimiter in data:
-            data = data.split(delimiter, 1)[1]
+        if delimiter in str(data):
+            data = str(data).split(delimiter, 1)[1]
         return data
 
 
