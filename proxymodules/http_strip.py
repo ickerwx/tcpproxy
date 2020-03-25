@@ -24,4 +24,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
