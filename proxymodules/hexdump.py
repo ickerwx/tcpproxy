@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 
 
@@ -29,9 +29,9 @@ class Module:
             result.append(b"%04X   %-*s   %s" % (i, self.len * (digits + 1),
                           hexa, text))
 
-        print b'\n'.join(result)
+        print (b'\n'.join(result))
         return data
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
