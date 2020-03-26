@@ -14,7 +14,7 @@ class Module:
         self.custom = False
         self.rewriteall = False  # will we block the first occurence?
         self.firstfound = False  # have we found the first occurence yet?
-        self.resetinterval = None # if we haven't found a fitting response in this many seconds, reset the state and set first to False again
+        self.resetinterval = None  # if we haven't found a fitting response in this many seconds, reset the state and set first to False again
         self.timer = time.time()
         if options is not None:
             if 'size' in options.keys():
@@ -23,7 +23,7 @@ class Module:
                 except ValueError:
                     pass  # use the default if you can't parse the parameter
             if 'verbose' in options.keys():
-                self.verbose=True
+                self.verbose = True
             if 'custom' in options.keys():
                 try:
                     with open(options['custom'], 'r') as handle:
@@ -32,24 +32,28 @@ class Module:
                     print ('Can\'t open custom error file, not using it.')
                     self.custom = False
             if 'rewriteall' in options.keys():
-                self.rewriteall=True
+                self.rewriteall = True
             if 'reset' in options.keys():
                 try:
                     self.resetinterval = float(options['reset'])
                 except ValueError:
                     pass  # use the default if you can't parse the parameter
 
-
     def execute(self, data):
+		try:
+			data = data.decode()
+		except:
+			UnicodeDecodeError
+			data = str(data)
         contentlength = 'content-length: ' + str(self.size)
-        if self.resetinterval is not None:
-            t = time.time()
-            if t - self.timer >= self.resetinterval:
-                if self.verbose:
-                    print ('Timer elapsed')
-                self.firstfound = False
-            self.timer = t
         if data.startswith('HTTP/1.1 200 OK') and contentlength in data.lower():
+            if self.resetinterval is not None:
+                t = time.time()
+                if t - self.timer >= self.resetinterval:
+                    if self.verbose:
+                        print ('Timer elapsed')
+                    self.firstfound = False
+                self.timer = t
             if self.rewriteall is False and self.firstfound is False:
                 # we have seen this response size for the first time and are not blocking the first one
                 self.firstfound = True
@@ -60,10 +64,12 @@ class Module:
                 data = self.custom
                 if self.verbose:
                     print ('Replaced response with custom response')
+                    print (data)
             else:
                 data = data.replace('200 OK', '404 Not Found', 1)
                 if self.verbose:
                     print ('Edited return code')
+                    print (data)
         return data
 
     def help(self):
