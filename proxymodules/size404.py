@@ -40,11 +40,11 @@ class Module:
                     pass  # use the default if you can't parse the parameter
 
     def execute(self, data):
-		try:
-			data = data.decode()
-		except:
-			UnicodeDecodeError
-			data = str(data)
+        try:
+            data = data.decode()
+        except:
+            UnicodeDecodeError
+            data = str(data)
         contentlength = 'content-length: ' + str(self.size)
         if data.startswith('HTTP/1.1 200 OK') and contentlength in data.lower():
             if self.resetinterval is not None:
