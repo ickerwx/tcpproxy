@@ -16,7 +16,7 @@ class Module:
                 self.realm = options['realm']
 
     def detect_linebreak(self, data):
-        line = data.split('\n', 1)[0]
+        line = str(data).split('\n', 1)[0]
         if line.endswith('\r'):
             return '\r\n'
         else:
@@ -24,7 +24,7 @@ class Module:
 
     def execute(self, data):
         delimiter = self.detect_linebreak(data)
-        lines = data.split(delimiter)
+        lines = str(data).split(delimiter)
         for index, line in enumerate(lines):
             if line.lower().startswith('www-authenticate: digest'):
                 lines[index] = 'WWW-Authenticate: Basic realm="%s"%s' % (self.realm, delimiter)

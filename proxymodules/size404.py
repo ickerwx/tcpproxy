@@ -29,7 +29,7 @@ class Module:
                     with open(options['custom'], 'r') as handle:
                         self.custom = handle.read()
                 except Exception as e:
-                    print 'Can\'t open custom error file, not using it.'
+                    print ('Can\'t open custom error file, not using it.')
                     self.custom = False
             if 'rewriteall' in options.keys():
                 self.rewriteall=True
@@ -46,7 +46,7 @@ class Module:
             t = time.time()
             if t - self.timer >= self.resetinterval:
                 if self.verbose:
-                    print 'Timer elapsed'
+                    print ('Timer elapsed')
                 self.firstfound = False
             self.timer = t
         if data.startswith('HTTP/1.1 200 OK') and contentlength in data.lower():
@@ -54,16 +54,16 @@ class Module:
                 # we have seen this response size for the first time and are not blocking the first one
                 self.firstfound = True
                 if self.verbose:
-                    print 'Letting this response through'
+                    print ('Letting this response through')
                 return data
             if self.custom is not False:
                 data = self.custom
                 if self.verbose:
-                    print 'Replaced response with custom response'
+                    print ('Replaced response with custom response')
             else:
                 data = data.replace('200 OK', '404 Not Found', 1)
                 if self.verbose:
-                    print 'Edited return code'
+                    print ('Edited return code')
         return data
 
     def help(self):
@@ -76,4 +76,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print ('This module is not supposed to be executed alone!')
