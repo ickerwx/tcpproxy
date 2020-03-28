@@ -4,6 +4,13 @@ To intercept the data, you will either have to be the gateway or do some kind of
 
 This tool is inspired by and partially based on the TCP proxy example used in Justin Seitz' book "Black Hat Python" by no starch press.
 
+## Install
+install PySocks for python3 use pip of pip3 to install.
+```
+pip install PySocks
+```
+
+
 ## Usage
 ```
 $ ./tcpproxy.py -h
