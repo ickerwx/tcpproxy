@@ -27,7 +27,7 @@ class Module:
             self.handle = open(self.file, 'wb', 0)  # unbuffered
             print ('Logging to file', self.file)
         logentry = time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n'
-        logentry += str(data)
+        logentry += data.decode(encoding="utf-8", errors="ignore")
         logentry += '-' * 20 + '\n'
         self.handle.write(logentry.encode("utf-8"))
         return data
