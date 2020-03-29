@@ -59,12 +59,10 @@ class Module:
                 data = self.custom
                 if self.verbose:
                     print 'Replaced response with custom response'
-                    print data
             else:
                 data = data.replace('200 OK', '404 Not Found', 1)
                 if self.verbose:
                     print 'Edited return code'
-                    print data
         return data
 
     def help(self):
