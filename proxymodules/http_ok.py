@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 
 
@@ -10,21 +10,21 @@ class Module:
         self.server = None
         if options is not None:
             if 'server' in options.keys():
-                self.server = options['server']
+                self.server = bytes(options['server'], 'ascii')
 
         # source will be set by the proxy thread later on
         self.source = None
 
     def execute(self, data):
         if self.server is None:
-            self.server = self.source[0]
+            self.server = bytes(self.source[0], 'ascii')
 
-        http = "HTTP/1.1 200 OK\r\n"
-        http += "Server: %s\r\n" % self.server
-        http += "Connection: keep-alive\r\n"
-        http += "Content-Length: %d\r\n" % len(data)
+        http = b"HTTP/1.1 200 OK\r\n"
+        http += b"Server: %s\r\n" % self.server
+        http += b"Connection: keep-alive\r\n"
+        http += b"Content-Length: %d\r\n" % len(data)
 
-        return http + "\r\n" + data
+        return http + b"\r\n" + data
 
     def help(self):
         h = '\tserver: remote source, used in response Server header\n'
@@ -32,4 +32,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

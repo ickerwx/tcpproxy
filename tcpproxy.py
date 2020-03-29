@@ -1,4 +1,4 @@
-#!/usr/bin/env  python2
+#!/usr/bin/env  python3
 import argparse
 import pkgutil
 import os
@@ -45,13 +45,13 @@ def parse_args():
 
     parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
                         help='IP address/host name of proxy')
-    
+
     parser.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
                         default=1080, help='proxy port', )
-    
+
     parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
                         help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
-    
+
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
                              ' before sending to remote target.')
@@ -78,7 +78,6 @@ def parse_args():
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
                         help='Print help of selected module')
 
-
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
                         default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
 
@@ -100,7 +99,7 @@ def generate_module_list(modstring, incoming=False, verbose=False):
             __import__('proxymodules.' + name)
             modlist.append(sys.modules['proxymodules.' + name].Module(incoming, verbose, options))
         except ImportError:
-            print 'Module %s not found' % name
+            print('Module %s not found' % name)
             sys.exit(3)
     return modlist
 
@@ -120,7 +119,7 @@ def parse_module_options(n):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            print op, ' is not valid!'
+            print(op, ' is not valid!')
             sys.exit(23)
     return name, options
 
@@ -132,7 +131,7 @@ def list_modules():
     for _, module, _ in pkgutil.iter_modules([module_path]):
         __import__('proxymodules.' + module)
         m = sys.modules['proxymodules.' + module].Module()
-        print '%s - %s' % (m.name, m.description)
+        print('%s - %s' % (m.name, m.description))
 
 
 def print_module_help(modlist):
@@ -140,10 +139,10 @@ def print_module_help(modlist):
     modules = generate_module_list(modlist)
     for m in modules:
         try:
-            print m.name
-            print m.help()
+            print(m.name)
+            print(m.help())
         except AttributeError:
-            print '\tNo options or missing help() function.'
+            print('\tNo options or missing help() function.')
 
 
 def update_module_hosts(modules, source, destination):
@@ -160,7 +159,7 @@ def update_module_hosts(modules, source, destination):
 
 def receive_from(s):
     # receive data from a socket until no more data is there
-    b = ""
+    b = b""
     while True:
         data = s.recv(4096)
         b += data
@@ -203,13 +202,13 @@ def enable_ssl(remote_socket, local_socket):
                                        ssl_version=ssl.PROTOCOL_TLSv1_2,
                                        )
     except ssl.SSLError as e:
-        print "SSL handshake failed for listening socket", str(e)
+        print("SSL handshake failed for listening socket", str(e))
         raise
 
     try:
         remote_socket = ssl.wrap_socket(remote_socket)
     except ssl.SSLError as e:
-        print "SSL handshake failed for remote socket", str(e)
+        print("SSL handshake failed for remote socket", str(e))
         raise
 
     return [remote_socket, local_socket]
@@ -222,6 +221,7 @@ def starttls(args, local_socket, read_sockets):
             is_client_hello(local_socket)
             )
 
+
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
@@ -229,7 +229,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     remote_socket = socks.socksocket()
 
     if args.proxy_ip:
-        proxy_types = {'SOCKS5' : socks.SOCKS5, 'SOCKS4' : socks.SOCKS4, 'HTTP' : socks.HTTP}
+        proxy_types = {'SOCKS5': socks.SOCKS5, 'SOCKS4': socks.SOCKS4, 'HTTP': socks.HTTP}
         remote_socket.set_proxy(proxy_types[args.proxy_type], args.proxy_ip, args.proxy_port)
 
     try:
@@ -238,7 +238,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
-            print '%s:%d - Connection refused' % (args.target_ip, args.target_port)
+            print('%s:%d - Connection refused' % (args.target_ip, args.target_port))
             log(args.logfile, '%s:%d - Connection refused' % (args.target_ip, args.target_port))
             return None
         else:
@@ -260,7 +260,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                 vprint("SSL enabled", args.verbose)
                 log(args.logfile, "SSL enabled")
             except ssl.SSLError as e:
-                print "SSL handshake failed", str(e)
+                print("SSL handshake failed", str(e))
                 log(args.logfile, "SSL handshake failed", str(e))
                 break
 
@@ -273,13 +273,13 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
             if sock == local_socket:
                 if len(data):
-                    log(args.logfile, '< < < out\n' + data)
+                    log(args.logfile, b'< < < out\n' + data)
                     if out_modules is not None:
                         data = handle_data(data, out_modules,
                                            args.no_chain_modules,
                                            False,  # incoming data?
                                            args.verbose)
-                    remote_socket.send(data)
+                    remote_socket.send(data.encode() if isinstance(data, str) else data)
                 else:
                     vprint("Connection from local client %s:%d closed" % peer, args.verbose)
                     log(args.logfile, "Connection from local client %s:%d closed" % peer)
@@ -288,7 +288,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
                     break
             elif sock == remote_socket:
                 if len(data):
-                    log(args.logfile, '> > > in\n' + data)
+                    log(args.logfile, b'> > > in\n' + data)
                     if in_modules is not None:
                         data = handle_data(data, in_modules,
                                            args.no_chain_modules,
@@ -307,41 +307,42 @@ def log(handle, message, message_only=False):
     # if message_only is True, only the message will be logged
     # otherwise the message will be prefixed with a timestamp and a line is
     # written after the message to make the log file easier to read
+    if not isinstance(message, bytes):
+        message = bytes(message, 'ascii')
     if handle is None:
         return
     if not message_only:
-        logentry = "%s %s\n" % (time.strftime('%Y%m%d-%H%M%S'),
-                                str(time.time()))
+        logentry = bytes("%s %s\n" % (time.strftime('%Y%m%d-%H%M%S'), str(time.time())), 'ascii')
     else:
-        logentry = ''
+        logentry = b''
     logentry += message
     if not message_only:
-        logentry += '\n' + '-' * 20 + '\n'
+        logentry += b'\n' + b'-' * 20 + b'\n'
     handle.write(logentry)
 
 
 def vprint(msg, is_verbose):
     # this will print msg, but only if is_verbose is True
     if is_verbose:
-        print msg
+        print(msg)
 
 
 def main():
     args = parse_args()
     if args.list is False and args.help_modules is None:
         if not args.target_ip:
-            print 'Target IP is required: -ti'
+            print('Target IP is required: -ti')
             sys.exit(6)
         if not args.target_port:
-            print 'Target port is required: -tp'
+            print('Target port is required: -tp')
             sys.exit(7)
 
     if args.logfile is not None:
         try:
-            args.logfile = open(args.logfile, 'a', 0)  # unbuffered
+            args.logfile = open(args.logfile, 'ab', 0)  # unbuffered
         except Exception as ex:
-            print 'Error opening logfile'
-            print ex
+            print('Error opening logfile')
+            print(ex)
             sys.exit(4)
 
     if args.list:
@@ -358,7 +359,7 @@ def main():
         except socket.gaierror:
             ip = False
         if ip is False:
-            print '%s is not a valid IP address or host name' % args.listen_ip
+            print('%s is not a valid IP address or host name' % args.listen_ip)
             sys.exit(1)
         else:
             args.listen_ip = ip
@@ -369,7 +370,7 @@ def main():
         except socket.gaierror:
             ip = False
         if ip is False:
-            print '%s is not a valid IP address or host name' % args.target_ip
+            print('%s is not a valid IP address or host name' % args.target_ip)
             sys.exit(2)
         else:
             args.target_ip = ip
@@ -391,7 +392,7 @@ def main():
     try:
         proxy_socket.bind((args.listen_ip, args.listen_port))
     except socket.error as e:
-        print e.strerror
+        print(e.strerror)
         sys.exit(5)
 
     proxy_socket.listen(10)
@@ -409,7 +410,7 @@ def main():
             proxy_thread.start()
     except KeyboardInterrupt:
         log(args.logfile, 'Ctrl+C detected, exiting...')
-        print '\nCtrl+C detected, exiting...'
+        print('\nCtrl+C detected, exiting...')
         sys.exit(0)
 
 

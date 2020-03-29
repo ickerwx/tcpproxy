@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 import time
 
@@ -24,11 +24,11 @@ class Module:
 
     def execute(self, data):
         if self.handle is None:
-            self.handle = open(self.file, 'w', 0)  # unbuffered
-            print 'Logging to file', self.file
-        logentry = time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n'
+            self.handle = open(self.file, 'wb', 0)  # unbuffered
+            print('Logging to file', self.file)
+        logentry = bytes(time.strftime('%Y%m%d-%H%M%S') + ' ' + str(time.time()) + '\n', 'ascii')
         logentry += data
-        logentry += '-' * 20 + '\n'
+        logentry += b'-' * 20 + b'\n'
         self.handle.write(logentry)
         return data
 
@@ -38,4 +38,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

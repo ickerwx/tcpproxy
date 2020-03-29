@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 
 
@@ -15,20 +15,20 @@ class Module:
     def execute(self, data):
         try:
             # split at \r\n\r\n to split the request into header and body
-            header, body = data.split('\r\n\r\n', 1)
+            header, body = data.split(b'\r\n\r\n', 1)
         except ValueError:
             # no \r\n\r\n, so probably not HTTP, we can go now
             return data
         # now split the header string into its lines
-        headers = header.split('\r\n')
+        headers = header.split(b'\r\n')
 
         for h in headers:
-            if h.lower().startswith('accept-encoding:') and 'gzip' in h:
-                headers[headers.index(h)] = h.replace('gzip', 'booo')
+            if h.lower().startswith(b'accept-encoding:') and b'gzip' in h:
+                headers[headers.index(h)] = h.replace(b'gzip', b'booo')
                 break
 
-        return '\r\n'.join(headers) + '\r\n\r\n' + body
+        return b'\r\n'.join(headers) + b'\r\n\r\n' + body
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

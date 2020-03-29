@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 
 
@@ -11,18 +11,18 @@ class Module:
         self.find = None  # if find is not None, this text will be highlighted
         if options is not None:
             if 'find' in options.keys():
-                self.find = options['find']  # text to highlight
+                self.find = bytes(options['find'], 'ascii')  # text to highlight
             if 'color' in options.keys():
-                self.color = '\033[' + options['color'] + 'm'  # highlight color
+                self.color = bytes('\033[' + options['color'] + 'm', 'ascii')  # highlight color
             else:
-                self.color = '\033[31;1m'
+                self.color = b'\033[31;1m'
 
     def execute(self, data):
         if self.find is None:
-            print data
+            print(data)
         else:
-            pdata = data.replace(self.find, self.color + self.find + '\033[0m')
-            print pdata
+            pdata = data.replace(self.find, self.color + self.find + b'\033[0m')
+            print(pdata.decode('ascii'))
         return data
 
     def help(self):
@@ -33,4 +33,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

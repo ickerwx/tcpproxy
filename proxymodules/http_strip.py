@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 
 
@@ -10,11 +10,11 @@ class Module:
         self.incoming = incoming  # incoming means module is on -im chain
 
     def detect_linebreak(self, data):
-        line = data.split('\n', 1)[0]
-        if line.endswith('\r'):
-            return '\r\n' * 2
+        line = data.split(b'\n', 1)[0]
+        if line.endswith(b'\r'):
+            return b'\r\n' * 2
         else:
-            return '\n' * 2
+            return b'\n' * 2
 
     def execute(self, data):
         delimiter = self.detect_linebreak(data)
@@ -24,4 +24,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

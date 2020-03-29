@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import os.path as path
 from distutils.util import strtobool
 
@@ -22,7 +22,7 @@ class Module:
         if self.verbose:
             msg += " from %s:%d" % self.source
             msg += " for %s:%d" % self.destination
-        print msg
+        print(msg)
         return data
 
     def help(self):
@@ -31,4 +31,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')

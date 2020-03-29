@@ -1,5 +1,4 @@
-#!/usr/bin/env python2
-
+#!/usr/bin/env python3
 import os
 import re
 
@@ -17,15 +16,15 @@ class Module:
 
         if options is not None:
             if 'search' in options.keys():
-                self.search = options['search']
+                self.search = bytes(options['search'], 'ascii')
             if 'replace' in options.keys():
-                self.replace = options['replace']
+                self.replace = bytes(options['replace'], 'ascii')
             if 'file' in options.keys():
                 self.filename = options['file']
                 try:
                     open(self.filename)
                 except IOError as ioe:
-                    print "Error opening %s: %s" % (self.filename, ioe.strerror)
+                    print("Error opening %s: %s" % (self.filename, ioe.strerror))
                     self.filename = None
             if 'separator' in options.keys():
                 self.separator = options['separator']
@@ -39,9 +38,9 @@ class Module:
             for line in open(self.filename).readlines():
                 try:
                     search, replace = line.split(self.separator, 1)
-                    pairs.append((search.strip(), replace.strip()))
+                    pairs.append((bytes(search.strip(), 'ascii'), bytes(replace.strip(), 'ascii')))
                 except ValueError:
-                    # line does not contain : and will be ignored
+                    # line does not contain separator and will be ignored
                     pass
 
         for search, replace in pairs:
@@ -60,4 +59,4 @@ class Module:
 
 
 if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
+    print('This module is not supposed to be executed alone!')
