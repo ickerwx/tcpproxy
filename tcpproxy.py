@@ -184,12 +184,12 @@ def handle_data(data, modules, dont_chain, incoming, verbose):
 def is_client_hello(sock):
     firstbytes = sock.recv(128, socket.MSG_PEEK)
     return (len(firstbytes) >= 3 and
-            firstbytes[0] == "\x16" and
-            firstbytes[1:3] in ["\x03\x00",
-                                "\x03\x01",
-                                "\x03\x02",
-                                "\x03\x03",
-                                "\x02\x00"]
+            firstbytes[0] == 0x16 and
+            firstbytes[1:3] in [b"\x03\x00",
+                                b"\x03\x01",
+                                b"\x03\x02",
+                                b"\x03\x03",
+                                b"\x02\x00"]
             )
 
 

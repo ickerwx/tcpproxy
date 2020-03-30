@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os.path as path
+from codecs import decode
 
 
 class Module:
@@ -19,10 +20,10 @@ class Module:
 
     def execute(self, data):
         if self.find is None:
-            print(data)
+            print(repr(decode(data, 'raw_unicode_escape')))
         else:
             pdata = data.replace(self.find, self.color + self.find + b'\033[0m')
-            print(pdata.decode('ascii'))
+            print(repr(decode(pdata, 'raw_unicode_escape')))
         return data
 
     def help(self):
