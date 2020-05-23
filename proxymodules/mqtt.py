@@ -23,7 +23,7 @@ class Module:
             if 'username' in options.keys():
                 self.username = options['username']
             if 'password' in options.keys():
-                self.server = options['password']
+                self.password = options['password']
             if 'port' in options.keys():
                 try:
                     self.port = int(options['port'])
