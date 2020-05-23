@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os.path as path
 import paho.mqtt.client as mqtt
+from distutils.util import strtobool
 
 
 class Module:
@@ -14,7 +15,8 @@ class Module:
         self.password = None
         self.server = None
         self.port = 1883
-        self.topic = ""
+        self.topic = ''
+        self.hex = False
         if options is not None:
             if 'clientid' in options.keys():
                 self.client_id = options['clientid']
@@ -27,10 +29,17 @@ class Module:
             if 'port' in options.keys():
                 try:
                     self.port = int(options['port'])
+                    if self.port not in range(1, 65536):
+                        raise ValueError
                 except ValueError:
-                    print('invalid port, using default 1883')
+                    print(f'port: invalid port {options["port"]}, using default {self.port}')
             if 'topic' in options.keys():
                 self.topic = options['topic']
+            if 'hex' in options.keys():
+                try:
+                    self.hex = bool(strtobool(options['hex']))
+                except ValueError:
+                    print(f'hex: {options["hex"]} is not a bool value, falling back to default value {self.hex}.')
 
         if self.server is not None:
             self.mqtt = mqtt.Client(self.client_id)
@@ -44,7 +53,10 @@ class Module:
         if self.mqtt is not None:
             if not self.mqtt.is_connected():
                 self.mqtt.reconnect()
-            self.mqtt.publish(self.topic, data.hex())
+            if self.hex is True:
+                self.mqtt.publish(self.topic, data.hex())
+            else:
+                self.mqtt.publish(self.topic, data)
         return data
 
     def help(self):
@@ -53,7 +65,8 @@ class Module:
               '\tusername: username\n'
               '\tpassword: password\n'
               '\tport: port to connect to, default 1883\n'
-              '\ttopic: topic to publish to, default is empty')
+              '\ttopic: topic to publish to, default is empty\n'
+              '\thex: encode data as hex before sending it. AAAA becomes 41414141.')
         return h
 
 

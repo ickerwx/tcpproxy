@@ -131,7 +131,7 @@ def list_modules():
     for _, module, _ in pkgutil.iter_modules([module_path]):
         __import__('proxymodules.' + module)
         m = sys.modules['proxymodules.' + module].Module()
-        print('%s - %s' % (m.name, m.description))
+        print(f'{m.name} - {m.description}')
 
 
 def print_module_help(modlist):
@@ -139,7 +139,7 @@ def print_module_help(modlist):
     modules = generate_module_list(modlist)
     for m in modules:
         try:
-            print(m.name)
+            print(f'{m.name} - {m.description}')
             print(m.help())
         except AttributeError:
             print('\tNo options or missing help() function.')
