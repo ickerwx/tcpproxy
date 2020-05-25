@@ -9,6 +9,10 @@ import time
 import select
 import errno
 
+# ConnData is an object that contains basic information about the connection.
+# Plugins can also use this object to exchange connection or status information.
+from conndata import ConnData
+
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
 
@@ -74,14 +78,30 @@ def parse_args():
 
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
                         help='Print help of selected module')
-
+    # TO BE MOVED TO SSL PLUGIN
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
                         default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
 
     return parser.parse_args()
 
-def generate_module_list(namelist, incoming=False, verbose=False):
-    # This method receives the comma-separated module list, imports the modules
+def load_module(n, args, incoming=False, verbose=False, prematch=None, conn_obj=None):
+    name, options = parse_module_options(n, args, conn_obj)
+    try:
+        __import__('proxymodules.' + name)
+        if hasattr(sys.modules['proxymodules.' + name], "Module"):
+            mod = sys.modules['proxymodules.' + name].Module(incoming, verbose, options)
+            mod.prematch = prematch
+            return mod
+        else:
+            connection_warning("none","Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
+            return None
+    except ImportError:
+        connection_warning("none","Module %s not found" % name, args, conn_obj)
+        return None
+        #sys.exit(3)
+
+def generate_module_list(namelist, args, incoming=False):
+    # This method receives a list of modules name, imports the modules
     # and creates a Module instance for each module. A list of these instances
     # is then returned.
     # The incoming parameter is True when the modules belong to the incoming
@@ -89,17 +109,12 @@ def generate_module_list(namelist, incoming=False, verbose=False):
     # modstring looks like mod1,mod2:key=val,mod3:key=val:key2=val2,mod4 ...
     modlist = []
     for n in namelist:
-        name, options = parse_module_options(n)
-        try:
-            __import__('proxymodules.' + name)
-            modlist.append(sys.modules['proxymodules.' + name].Module(incoming, verbose, options))
-        except ImportError:
-            print('Module %s not found' % name)
-            sys.exit(3)
+        mod = load_module(n, args)
+        if mod:
+            modlist.append(mod)
     return modlist
 
-
-def parse_module_options(n):
+def parse_module_options(n,  args, conn_obj):
     # n is of the form module_name:key1=val1:key2=val2 ...
     # this method returns the module name and a dict with the options
     n = n.split(':', 1)
@@ -114,25 +129,34 @@ def parse_module_options(n):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            print(op, ' is not valid!')
-            sys.exit(23)
+            connection_warning("none","Argument %s for module %s is not valid" % (op, name), args, conn_obj)
+            #sys.exit(23)
     return name, options
 
-
-def list_modules():
-    # show all available proxy modules
+def get_modules_list():
+    mlist = {}
+    # get all available proxy modules help and descriptions
     cwd = os.getcwd()
     module_path = cwd + os.sep + 'proxymodules'
     for _, module, _ in pkgutil.iter_modules([module_path]):
         __import__('proxymodules.' + module)
-        m = sys.modules['proxymodules.' + module].Module()
-        print('%s - %s' % (m.name, m.description))
+        if hasattr(sys.modules['proxymodules.' + module], 'Module'):
+            m = sys.modules['proxymodules.' + module].Module()
+            mlist[m.name] = m.description
+            if hasattr(m, 'help') and callable(getattr(m, 'help')):
+                mlist[m.name] += "\n"
+                mlist[m.name] += m.help()
+    return mlist
 
+def list_modules():
+    # show all available proxy modules
+    for name, description in get_modules_list().items():
+        print ('%s - %s' % (name, description))
 
-def print_module_help(modliststr):
+def print_module_help(modliststr,  args):
     # parse comma-separated list of module names, print module help text
     namelist = modliststr.split(',')
-    modules = generate_module_list(namelist)
+    modules = generate_module_list(namelist, args)
     for m in modules:
         try:
             print(m.name)
@@ -140,18 +164,20 @@ def print_module_help(modliststr):
         except AttributeError:
             print('\tNo options or missing help() function.')
 
-
-def update_module_hosts(modules, source, destination):
+def update_module_hosts(modules, conn_obj):
     # set source and destination IP/port for each module
-    # source and destination are ('IP', port) tuples
+    # a plugin can use set_connection() to get a connection object
+    # or source and destination are ('IP', port) tuples
     # this can only be done once local and remote connections have been established
     if modules is not None:
         for m in modules:
-            if hasattr(m, 'source'):
-                m.source = source
-            if hasattr(m, 'destination'):
-                m.destination = destination
-
+            if hasattr(m, 'set_connection') and callable(getattr(m, 'set_connection')):
+                m.set_connection(conn_obj)
+            else:
+                if hasattr(m, 'source'):
+                    m.source = conn_obj.source
+                if hasattr(m, 'destination'):
+                    m.destination = conn_obj.destination
 
 def receive_from(s):
     # receive data from a socket until no more data is there
@@ -164,13 +190,13 @@ def receive_from(s):
     return b
 
 
-def handle_data(data, modules, dont_chain, incoming, verbose):
-    # execute each active module on the data. If dont_chain is set, feed the
+def handle_data(data, modules, args, incoming, conn_obj):
+    # execute each active module on the data. If no_chain_modules is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
-        vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, verbose)
-        if dont_chain:
+        vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
+        if args.no_chain_modules:
             m.execute(data)
         else:
             data = m.execute(data)
@@ -182,20 +208,26 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # passing it on.
     remote_socket = socket.socket()
 
+    # Create conn obj based on known information about the connection.
+    conn_obj = ConnData(
+        source=local_socket.getpeername(), 
+        destination=(args.target_ip,args.target_port)
+    )
+
     try:
-        remote_socket.connect((args.target_ip, args.target_port))
+        remote_socket.connect((conn_obj.dst, conn_obj.dstport))
         vprint('Connected to %s:%d' % remote_socket.getpeername(), args.verbose)
         log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
-            print('%s:%d - Connection refused' % (args.target_ip, args.target_port))
-            log(args.logfile, '%s:%d - Connection refused' % (args.target_ip, args.target_port))
-            return None
+            connection_failed("server","connection refused", args, conn_obj)
+            #return None
         else:
-            raise serr
+            connection_failed("server","connection error "+serr.__str__(),args,conn_obj)
+            #raise serr
 
-    update_module_hosts(out_modules, local_socket.getpeername(), remote_socket.getpeername())
-    update_module_hosts(in_modules, remote_socket.getpeername(), local_socket.getpeername())
+    update_module_hosts(out_modules, conn_obj)
+    update_module_hosts(in_modules, conn_obj)
 
     # This loop ends when no more data is received on either the local or the
     # remote socket
@@ -204,41 +236,68 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
 
         for sock in read_sockets:
-            peer = sock.getpeername()
-            data = receive_from(sock)
-            log(args.logfile, 'Received %d bytes' % len(data))
+            try:
+                data = receive_from(sock)
+                running = handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, out_modules, conn_obj)
+            except Exception as err:
+                connection_failed("client" if sock==local_socket else "server", err.__str__(), args, conn_obj)
+                return None
 
-            if sock == local_socket:
-                if len(data):
-                    log(args.logfile, b'< < < out\n' + data)
-                    if out_modules is not None:
-                        data = handle_data(data, out_modules,
-                                           args.no_chain_modules,
-                                           False,  # incoming data?
-                                           args.verbose)
-                    remote_socket.send(data.encode() if isinstance(data, str) else data)
-                else:
-                    vprint("Connection from local client %s:%d closed" % peer, args.verbose)
-                    log(args.logfile, "Connection from local client %s:%d closed" % peer)
-                    remote_socket.close()
-                    running = False
-                    break
-            elif sock == remote_socket:
-                if len(data):
-                    log(args.logfile, b'> > > in\n' + data)
-                    if in_modules is not None:
-                        data = handle_data(data, in_modules,
-                                           args.no_chain_modules,
-                                           True,  # incoming data?
-                                           args.verbose)
-                    local_socket.send(data)
-                else:
-                    vprint("Connection to remote server %s:%d closed" % peer, args.verbose)
-                    log(args.logfile, "Connection to remote server %s:%d closed" % peer)
-                    local_socket.close()
-                    running = False
-                    break
+def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, out_modules, conn_obj):
 
+    # Retrieve peer for loggin purposes
+    peer = sock.getpeername()
+
+    if args.logfile:
+        log(args.logfile, 'Received %d bytes from %s' % (len(data),peer))
+
+    if sock == local_socket:
+        if len(data):
+            log(args.logfile, b'< < < out\n' + data)
+            data = handle_data(data, out_modules,
+                                args,
+                                False,  # incoming data?
+                                conn_obj
+            )
+            remote_socket.send(data.encode() if isinstance(data, str) else data)
+        else:
+            vprint("Connection from local client %s:%d closed" % peer, args.verbose)
+            log(args.logfile, "Connection from local client %s:%d closed" % peer)
+            remote_socket.close()
+            return False
+
+    elif sock == remote_socket:
+        if len(data):
+            log(args.logfile, b'> > > in\n' + data)
+            data = handle_data(data, in_modules,
+                                args,
+                                True,  # incoming data?
+                                conn_obj
+            )
+            local_socket.send(data)
+        else:
+            vprint("Connection to remote server %s:%d closed" % peer, args.verbose)
+            log(args.logfile, "Connection to remote server %s:%d closed" % peer)
+            local_socket.close()
+            return False
+
+    return True
+
+def connection_failed(direction, msg, args, conn_obj=None):
+    if conn_obj:
+        error_msg = 'FAILED: connection to %s: %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
+    else:
+        error_msg = 'FAILED: %s' % (msg)
+    print(error_msg)
+    log(args.logfile, error_msg)
+
+def connection_warning(direction, msg, args, conn_obj=None):
+    if conn_obj:
+        warning_msg = 'WARNING: %s while connecting to %s: %s:%d' % (msg, direction, conn_obj.dst, conn_obj.dstport)
+    else:
+        warning_msg = 'WARNING: %s' % (msg)
+    print(warning_msg)
+    log(args.logfile, warning_msg)
 
 def log(handle, message, message_only=False):
     # if message_only is True, only the message will be logged
@@ -287,7 +346,7 @@ def main():
         sys.exit(0)
 
     if args.help_modules is not None:
-        print_module_help(args.help_modules)
+        print_module_help(args.help_modules, args)
         sys.exit(0)
 
     if args.listen_ip != '0.0.0.0' and not is_valid_ip4(args.listen_ip):
@@ -312,6 +371,9 @@ def main():
         else:
             args.target_ip = ip
 
+    # Generate requested 'in' modules list
+    # Append specific modules required by
+    # provided parameters such as ssl or proxy
     if args.in_modules is not None:
         in_modules_list = args.in_modules.split(',')
     else:
@@ -324,8 +386,11 @@ def main():
         if "proxy" not in in_modules_list:
             in_modules_list.append("proxy")
 
-    in_modules = generate_module_list(in_modules_list, incoming=True, verbose=args.verbose)
+    in_modules = generate_module_list(in_modules_list, args,  incoming=True)
 
+    # Generate requested 'out' modules list
+    # Append specific modules required by
+    # provided parameters such as ssl or proxy
     if args.out_modules is not None:
         out_modules_list =  args.out_modules.split(',')
     else:
@@ -335,7 +400,7 @@ def main():
         if "proxy" not in out_modules_list:
             out_modules_list.append("proxy")
 
-    out_modules = generate_module_list(out_modules_list, incoming=False, verbose=args.verbose)
+    out_modules = generate_module_list(out_modules_list, args,  incoming=False)
 
     # this is the socket we will listen on for incoming connections
     proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
