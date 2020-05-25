@@ -32,10 +32,12 @@ def parse_args():
                                                  'the intercepted traffic.')
 
     parser.add_argument('-ti', '--targetip', dest='target_ip',
-                        help='remote target IP or host name')
+                        help='remote target IP or host name (none for transparent proxying based on iptable)',
+                        default=None)
 
     parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
-                        help='remote target port')
+                        help='remote target port',
+                        default=0)
 
     parser.add_argument('-li', '--listenip', dest='listen_ip',
                         default='0.0.0.0', help='IP address/host name to listen for ' +
@@ -209,10 +211,20 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     remote_socket = socket.socket()
 
     # Create conn obj based on known information about the connection.
-    conn_obj = ConnData(
-        source=local_socket.getpeername(), 
-        destination=(args.target_ip,args.target_port)
-    )
+    try:
+        conn_obj = ConnData(
+            source=local_socket.getpeername(),
+            destination=(args.target_ip,args.target_port),
+            dest_socket=local_socket
+        )
+    except Exception as err:
+        connection_failed("none",  err.__str__(),  args)
+        return None
+
+    # TODO improve error check by verifying all Local IP addresses (if listen_ip is not used)
+    if (conn_obj.dst == args.listen_ip and conn_obj.dstport == args.listen_port):
+        connection_failed("server",  "Attempt to connect to TCPProxy itself cancelled",  args,  conn_obj)
+        return None
 
     try:
         remote_socket.connect((conn_obj.dst, conn_obj.dstport))
@@ -326,11 +338,11 @@ def vprint(msg, is_verbose):
 def main():
     args = parse_args()
     if args.list is False and args.help_modules is None:
-        if not args.target_ip:
-            print('Target IP is required: -ti')
+        if args.target_port and not args.target_ip:
+            print('Both target IP and target Ports are required: missing -ti')
             sys.exit(6)
-        if not args.target_port:
-            print('Target port is required: -tp')
+        if args.target_ip and not args.target_port:
+            print('Both target IP and target Ports are required: missing -tp')
             sys.exit(7)
 
     if args.logfile is not None:
@@ -360,7 +372,7 @@ def main():
         else:
             args.listen_ip = ip
 
-    if not is_valid_ip4(args.target_ip):
+    if args.target_ip and not is_valid_ip4(args.target_ip):
         try:
             ip = socket.gethostbyname(args.target_ip)
         except socket.gaierror:
