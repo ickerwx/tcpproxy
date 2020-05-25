@@ -5,15 +5,12 @@ import os
 import sys
 import threading
 import socket
-import socks
-import ssl
 import time
 import select
 import errno
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
-
 
 def is_valid_ip4(ip):
     # some rudimentary checks if ip is actually a valid IP
@@ -83,8 +80,7 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def generate_module_list(modstring, incoming=False, verbose=False):
+def generate_module_list(namelist, incoming=False, verbose=False):
     # This method receives the comma-separated module list, imports the modules
     # and creates a Module instance for each module. A list of these instances
     # is then returned.
@@ -92,7 +88,6 @@ def generate_module_list(modstring, incoming=False, verbose=False):
     # chain (-im)
     # modstring looks like mod1,mod2:key=val,mod3:key=val:key2=val2,mod4 ...
     modlist = []
-    namelist = modstring.split(',')
     for n in namelist:
         name, options = parse_module_options(n)
         try:
@@ -134,9 +129,10 @@ def list_modules():
         print('%s - %s' % (m.name, m.description))
 
 
-def print_module_help(modlist):
+def print_module_help(modliststr):
     # parse comma-separated list of module names, print module help text
-    modules = generate_module_list(modlist)
+    namelist = modliststr.split(',')
+    modules = generate_module_list(namelist)
     for m in modules:
         try:
             print(m.name)
@@ -180,57 +176,11 @@ def handle_data(data, modules, dont_chain, incoming, verbose):
             data = m.execute(data)
     return data
 
-
-def is_client_hello(sock):
-    firstbytes = sock.recv(128, socket.MSG_PEEK)
-    return (len(firstbytes) >= 3 and
-            firstbytes[0] == 0x16 and
-            firstbytes[1:3] in [b"\x03\x00",
-                                b"\x03\x01",
-                                b"\x03\x02",
-                                b"\x03\x03",
-                                b"\x02\x00"]
-            )
-
-
-def enable_ssl(remote_socket, local_socket):
-    try:
-        local_socket = ssl.wrap_socket(local_socket,
-                                       server_side=True,
-                                       certfile="mitm.pem",
-                                       keyfile="mitm.pem",
-                                       ssl_version=ssl.PROTOCOL_TLSv1_2,
-                                       )
-    except ssl.SSLError as e:
-        print("SSL handshake failed for listening socket", str(e))
-        raise
-
-    try:
-        remote_socket = ssl.wrap_socket(remote_socket)
-    except ssl.SSLError as e:
-        print("SSL handshake failed for remote socket", str(e))
-        raise
-
-    return [remote_socket, local_socket]
-
-
-def starttls(args, local_socket, read_sockets):
-    return (args.use_ssl and
-            local_socket in read_sockets and
-            not isinstance(local_socket, ssl.SSLSocket) and
-            is_client_hello(local_socket)
-            )
-
-
 def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
     # passing it on.
-    remote_socket = socks.socksocket()
-
-    if args.proxy_ip:
-        proxy_types = {'SOCKS5': socks.SOCKS5, 'SOCKS4': socks.SOCKS4, 'HTTP': socks.HTTP}
-        remote_socket.set_proxy(proxy_types[args.proxy_type], args.proxy_ip, args.proxy_port)
+    remote_socket = socket.socket()
 
     try:
         remote_socket.connect((args.target_ip, args.target_port))
@@ -252,19 +202,6 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     running = True
     while running:
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
-
-        if starttls(args, local_socket, read_sockets):
-            try:
-                ssl_sockets = enable_ssl(remote_socket, local_socket)
-                remote_socket, local_socket = ssl_sockets
-                vprint("SSL enabled", args.verbose)
-                log(args.logfile, "SSL enabled")
-            except ssl.SSLError as e:
-                print("SSL handshake failed", str(e))
-                log(args.logfile, "SSL handshake failed", str(e))
-                break
-
-            read_sockets, _, _ = select.select(ssl_sockets, [], [])
 
         for sock in read_sockets:
             peer = sock.getpeername()
@@ -376,14 +313,29 @@ def main():
             args.target_ip = ip
 
     if args.in_modules is not None:
-        in_modules = generate_module_list(args.in_modules, incoming=True, verbose=args.verbose)
+        in_modules_list = args.in_modules.split(',')
     else:
-        in_modules = None
+        in_modules_list = []
+
+    if args.use_ssl:
+        if "ssl" not in in_modules_list:
+            in_modules_list.append("ssl")
+    if args.proxy_ip:
+        if "proxy" not in in_modules_list:
+            in_modules_list.append("proxy")
+
+    in_modules = generate_module_list(in_modules_list, incoming=True, verbose=args.verbose)
 
     if args.out_modules is not None:
-        out_modules = generate_module_list(args.out_modules, incoming=False, verbose=args.verbose)
+        out_modules_list =  args.out_modules.split(',')
     else:
-        out_modules = None
+        out_modules_list = []
+
+    if args.proxy_ip:
+        if "proxy" not in out_modules_list:
+            out_modules_list.append("proxy")
+
+    out_modules = generate_module_list(out_modules_list, incoming=False, verbose=args.verbose)
 
     # this is the socket we will listen on for incoming connections
     proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
