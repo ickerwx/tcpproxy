@@ -8,6 +8,7 @@ import socket
 import time
 import select
 import errno
+import queue
 
 # ConnData is an object that contains basic information about the connection.
 # Plugins can also use this object to exchange connection or status information.
@@ -204,7 +205,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
             data = m.execute(data)
     return data
 
-def start_proxy_thread(local_socket, args, in_modules, out_modules):
+def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
     # passing it on.
@@ -244,7 +245,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
     # This loop ends when no more data is received on either the local or the
     # remote socket
     running = True
-    while running:
+    while running and trunning.qsize() <= 0:
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
 
         for sock in read_sockets:
@@ -426,6 +427,10 @@ def main():
 
     proxy_socket.listen(10)
     log(args.logfile, str(args))
+
+    threads=[]
+    running = queue.Queue()
+
     # endless loop until ctrl+c
     try:
         while True:
@@ -433,13 +438,22 @@ def main():
             vprint('Connection from %s:%d' % in_addrinfo, args.verbose)
             log(args.logfile, 'Connection from %s:%d' % in_addrinfo)
             proxy_thread = threading.Thread(target=start_proxy_thread,
-                                            args=(in_socket, args, in_modules,
+                                            args=(running,  in_socket, args, in_modules,
                                                   out_modules))
             log(args.logfile, "Starting proxy thread " + proxy_thread.name)
             proxy_thread.start()
+            threads.append(proxy_thread)
     except KeyboardInterrupt:
         log(args.logfile, 'Ctrl+C detected, exiting...')
         print('\nCtrl+C detected, exiting...')
+        running.put(True)
+        for thread in threads:
+            print("Killing thread",thread.ident,"...",)
+            if thread.is_alive():
+                thread.join()
+                print("killed.")
+            else:
+                print("already dead.")
         sys.exit(0)
 
 
