@@ -198,12 +198,54 @@ def handle_data(data, modules, args, incoming, conn_obj):
     # output of one plugin to the following plugin. Not every plugin will
     # necessarily modify the data, though.
     for m in modules:
-        vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
-        if args.no_chain_modules:
-            m.execute(data)
-        else:
-            data = m.execute(data)
+        if hasattr(m,"execute") and callable(m.execute):
+            vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
+            try:
+                if args.no_chain_modules:
+                    m.execute(data)
+                else:
+                    data = m.execute(data)
+            except Exception as ex:
+                connection_failed(m.name,ex.__str__(),args,conn_obj)
+
     return data
+
+
+def peek_data(data, modules, args, incoming, conn_obj):
+    # execute each active module on the peeked data
+    peeks = {}
+    for m in modules:
+        if hasattr(m,"peek") and callable(m.peek):
+            vprint(("> > > > in " if incoming else "< < < < out ") + m.name + " peek", args.verbose)
+            if args.no_chain_modules:
+                m.peek(data)
+            else:
+                peeks.update(m.peek(data))
+
+    return peeks
+
+
+def wrap_socket(sock, modules, args, incoming, conn_obj):
+    wraps = {}
+    for m in modules:
+        if hasattr(m,"wrap") and callable(m.wrap):
+            vprint(("> > > > in: " if incoming else "< < < < out ") + m.name + " wrap", args.verbose)
+            try:
+                if args.no_chain_modules:
+                    m.wrap(sock)
+                else:
+                    if "remote_socket" in wraps:
+                        vprint("Wrap remote socket following last wrap", args.verbose)
+                        sock = [wraps["remote_socket"],sock[1],sock[2]]
+                    if "local_socket" in wraps:
+                        vprint("Wrap local socket following last wrap", args.verbose)
+                        sock = [wraps[0],wraps["local_socket"],sock[2]]
+                    wraps.update(m.wrap(sock))
+            except Exception as ex:
+                connection_failed(m.name+" wrapping",ex.__str__(), args, conn_obj)
+
+    return wraps
+
 
 def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
@@ -248,6 +290,46 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     while running and trunning.qsize() <= 0:
         read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
 
+        # Before execution data modules, run peek and wrap modules
+        for sock in read_sockets:
+            # First peek data
+            try:
+                # If socket has support for peeking, retrieve the first 1024 bytes
+                if hasattr(sock, "peek") and callable(sock.peek):
+                    firstbytes = sock.peek(1024)
+                # Python SSL module typically does not support socket peeking
+                elif isinstance(sock, ssl.SSLSocket):
+                    firstbytes = ""
+                # Last try by using the MSG_PEEK API
+                else:
+                    firstbytes = sock.recv(1024, socket.MSG_PEEK)
+            except Exception as err:
+                connection_failed("client" if sock==local_socket else "server", "Cannot peek socket:"+ex.__str__(), args, conn_obj)
+                return None
+
+            if sock == local_socket:
+                peeks = peek_data(firstbytes, out_modules, args, sock==remote_socket,  conn_obj)
+            else:
+                peeks = peek_data(firstbytes, in_modules, args, sock==remote_socket,  conn_obj)
+
+            # Wrapping comes next
+            # We parse read socket but we probably need to wrap remote socket first anyway
+            if sock == local_socket:
+                wraps = wrap_socket([remote_socket, local_socket, sock], out_modules, args, sock==remote_socket, conn_obj)
+            else:
+                wraps = wrap_socket([remote_socket, local_socket, sock], in_modules, args, sock==remote_socket, conn_obj)
+
+            # Retrieve the last wrapped socket in the chain as our "normal" socket
+            if "local_socket" in wraps:
+                local_socket = wraps["local_socket"]
+            if "remote_socket" in wraps:
+                remote_socket = wraps["remote_socket"]
+
+            # If there have been wrapping, read the data from the wrapped sockets
+            if "local_socket" in wraps or "remote_socket" in wraps:
+                read_sockets, _, _ = select.select([local_socket, remote_socket], [], [])
+
+        # Finally retrieve data from socket
         for sock in read_sockets:
             try:
                 data = receive_from(sock)
