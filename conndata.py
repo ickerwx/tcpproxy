@@ -68,7 +68,10 @@ class ConnData:
         }
         res.update(**kwargs)
         if data:
-            res["data"] = base64.b64encode(data)
+            if isinstance(data,bytes):
+                res["data"] = base64.b64encode(data).decode("utf-8")
+            else:
+                res["data"] = base64.b64encode(data.encode("utf-8")).decode("utf-8")
 
         return res
 
