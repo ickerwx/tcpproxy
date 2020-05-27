@@ -9,6 +9,7 @@ import time
 import select
 import errno
 import queue
+import ssl
 
 # ConnData is an object that contains basic information about the connection.
 # Plugins can also use this object to exchange connection or status information.
@@ -46,15 +47,6 @@ def parse_args():
 
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
                         default=8080, help='port to listen on')
-
-    parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
-                        help='IP address/host name of proxy')
-
-    parser.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
-                        default=1080, help='proxy port', )
-
-    parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
-                        help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
 
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
@@ -304,7 +296,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 else:
                     firstbytes = sock.recv(1024, socket.MSG_PEEK)
             except Exception as err:
-                connection_failed("client" if sock==local_socket else "server", "Cannot peek socket:"+ex.__str__(), args, conn_obj)
+                connection_failed("client" if sock==local_socket else "server", "Cannot peek socket: "+err.__str__(), args, conn_obj)
                 return None
 
             if sock == local_socket:
@@ -474,13 +466,6 @@ def main():
     else:
         in_modules_list = []
 
-    if args.use_ssl:
-        if "ssl" not in in_modules_list:
-            in_modules_list.append("ssl")
-    if args.proxy_ip:
-        if "proxy" not in in_modules_list:
-            in_modules_list.append("proxy")
-
     in_modules = generate_module_list(in_modules_list, args,  incoming=True)
 
     # Generate requested 'out' modules list
@@ -490,10 +475,6 @@ def main():
         out_modules_list =  args.out_modules.split(',')
     else:
         out_modules_list = []
-
-    if args.proxy_ip:
-        if "proxy" not in out_modules_list:
-            out_modules_list.append("proxy")
 
     out_modules = generate_module_list(out_modules_list, args,  incoming=False)
 
