@@ -73,25 +73,22 @@ def parse_args():
 
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
                         help='Print help of selected module')
-    # TO BE MOVED TO SSL PLUGIN
-    parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
-                        default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
 
     return parser.parse_args()
 
-def load_module(n, args, incoming=False, verbose=False, prematch=None, conn_obj=None):
+def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
     name, options = parse_module_options(n, args, conn_obj)
     try:
         __import__('proxymodules.' + name)
         if hasattr(sys.modules['proxymodules.' + name], "Module"):
-            mod = sys.modules['proxymodules.' + name].Module(incoming, verbose, options)
+            mod = sys.modules['proxymodules.' + name].Module(incoming, args.verbose, options)
             mod.prematch = prematch
             return mod
         else:
             connection_warning("none","Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
             return None
-    except ImportError:
-        connection_warning("none","Module %s not found" % name, args, conn_obj)
+    except ImportError as ex:
+        connection_warning("none","Cannot load module %s: %s" % (name,str(ex)), args, conn_obj)
         return None
         #sys.exit(3)
 
@@ -235,6 +232,8 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
                     wraps.update(m.wrap(sock))
             except Exception as ex:
                 connection_failed(m.name+" wrapping",ex.__str__(), args, conn_obj)
+                import traceback
+                traceback.print_exc()
 
     return wraps
 
@@ -372,7 +371,7 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
 
 def connection_failed(direction, msg, args, conn_obj=None):
     if conn_obj:
-        error_msg = 'FAILED: connection to %s: %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
+        error_msg = '%s FAILED for connection to %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
     else:
         error_msg = 'FAILED: %s' % (msg)
     print(error_msg)
@@ -380,7 +379,7 @@ def connection_failed(direction, msg, args, conn_obj=None):
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = 'WARNING: %s while connecting to %s: %s:%d' % (msg, direction, conn_obj.dst, conn_obj.dstport)
+        warning_msg = '%s WARNING while connecting to %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
     else:
         warning_msg = 'WARNING: %s' % (msg)
     print(warning_msg)
