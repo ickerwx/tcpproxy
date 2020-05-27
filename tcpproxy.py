@@ -123,7 +123,6 @@ class RulesLoader():
         except Exception as ex:
             connection_failed("none", "Invalid URI provided for loading ruleset: %s" % str(ex), args)
             sys.exit(1)
-            print(uri)
 
         if self.uri.scheme in ["http", "https"]:
             connection_failed("none", "Loading ruleset from http/https is not implemented", args)
@@ -133,9 +132,18 @@ class RulesLoader():
             if "redis" not in sys.modules:
                 connection_failed("none", "Dependency redis not present. Impossible to load specified ruleset", args)
                 sys.exit(1)
+
+            # Create a redis connection pool and client
             self.redis_pool = redis.ConnectionPool.from_url(self.uri.geturl())
             self.redis = redis.Redis(connection_pool=self.redis_pool)
             self.handler = "redis"
+
+            # Store module documentation on redis
+            infos = get_modules_list()
+            self.redis.set('modules', " ".join(infos.keys()))
+            self.redis.set('default_modules', "peek_sni,peek_httphost,peek_ssl")
+            for key, value in infos.items():
+                self.redis.set("module:%s:help"%key, value)
 
         elif self.uri.scheme in ["file"]:
             connection_failed("none", "Loading ruleset from file is not implemented", args)
@@ -148,7 +156,7 @@ class RulesLoader():
     def read(self, args, conn):
         if self.handler == "redis":
             try:
-                rules = self.redis.get("rules")
+                rules = self.redis.get('rules')
             except Exception as ex:
                 connection_failed("none", "Failed to connect to redis to retrieve rules: %s" % str(ex), args, conn)
                 return {}
