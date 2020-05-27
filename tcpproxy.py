@@ -134,10 +134,20 @@ def get_modules_list():
         __import__('proxymodules.' + module)
         if hasattr(sys.modules['proxymodules.' + module], 'Module'):
             m = sys.modules['proxymodules.' + module].Module()
-            mlist[m.name] = m.description
-            if hasattr(m, 'help') and callable(getattr(m, 'help')):
-                mlist[m.name] += "\n"
-                mlist[m.name] += m.help()
+            if hasattr(m, 'getInfos') and callable(getattr(m, 'getInfos')):
+                mname, mdesc, mhelp = m.getInfos()
+            else:
+                mname = m.name
+                mdesc = m.description
+                if hasattr(m, 'help') and callable(getattr(m, 'help')):
+                    mhelp = m.help()
+                else:
+                    mhelp = None
+            mlist[mname] = mdesc
+            if mhelp:
+                mlist[mname] += "\n"
+                mlist[mname] += mhelp
+
     return mlist
 
 def list_modules():
@@ -188,14 +198,15 @@ def handle_data(data, modules, args, incoming, conn_obj):
     # necessarily modify the data, though.
     for m in modules:
         if hasattr(m,"execute") and callable(m.execute):
-            vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
-            try:
-                if args.no_chain_modules:
-                    m.execute(data)
-                else:
-                    data = m.execute(data)
-            except Exception as ex:
-                connection_failed(m.name,ex.__str__(),args,conn_obj)
+            if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
+                vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
+                try:
+                    if args.no_chain_modules:
+                        m.execute(data)
+                    else:
+                        data = m.execute(data)
+                except Exception as ex:
+                    connection_failed(m.name,ex.__str__(),args,conn_obj)
 
     return data
 
@@ -205,11 +216,12 @@ def peek_data(data, modules, args, incoming, conn_obj):
     peeks = {}
     for m in modules:
         if hasattr(m,"peek") and callable(m.peek):
-            vprint(("> > > > in " if incoming else "< < < < out ") + m.name + " peek", args.verbose)
-            if args.no_chain_modules:
-                m.peek(data)
-            else:
-                peeks.update(m.peek(data))
+            if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
+                vprint(("> > > > in " if incoming else "< < < < out ") + m.name + " peek", args.verbose)
+                if args.no_chain_modules:
+                    m.peek(data)
+                else:
+                    peeks.update(m.peek(data))
 
     return peeks
 
@@ -218,22 +230,23 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
     wraps = {}
     for m in modules:
         if hasattr(m,"wrap") and callable(m.wrap):
-            vprint(("> > > > in: " if incoming else "< < < < out ") + m.name + " wrap", args.verbose)
-            try:
-                if args.no_chain_modules:
-                    m.wrap(sock)
-                else:
-                    if "remote_socket" in wraps:
-                        vprint("Wrap remote socket following last wrap", args.verbose)
-                        sock = [wraps["remote_socket"],sock[1],sock[2]]
-                    if "local_socket" in wraps:
-                        vprint("Wrap local socket following last wrap", args.verbose)
-                        sock = [wraps[0],wraps["local_socket"],sock[2]]
-                    wraps.update(m.wrap(sock))
-            except Exception as ex:
-                connection_failed(m.name+" wrapping",ex.__str__(), args, conn_obj)
-                import traceback
-                traceback.print_exc()
+            if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
+                vprint(("> > > > in: " if incoming else "< < < < out ") + m.name + " wrap", args.verbose)
+                try:
+                    if args.no_chain_modules:
+                        m.wrap(sock)
+                    else:
+                        if "remote_socket" in wraps:
+                            vprint("Wrap remote socket following last wrap", args.verbose)
+                            sock = [wraps["remote_socket"],sock[1],sock[2]]
+                        if "local_socket" in wraps:
+                            vprint("Wrap local socket following last wrap", args.verbose)
+                            sock = [wraps[0],wraps["local_socket"],sock[2]]
+                        wraps.update(m.wrap(sock))
+                except Exception as ex:
+                    connection_failed(m.name+" wrapping",ex.__str__(), args, conn_obj)
+                    import traceback
+                    traceback.print_exc()
 
     return wraps
 

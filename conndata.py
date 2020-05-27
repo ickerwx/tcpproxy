@@ -1,6 +1,7 @@
 import socket
 import struct
 import base64
+import json
 
 """
 ConnData is an object that contains basic information about the connection.
@@ -82,3 +83,9 @@ class ConnData:
 
     def get_tags(self):
         return self.tags
+
+    def get_json(self, data=None, **kwargs):
+        return json.dumps(self.get_dict(data, **kwargs))
+
+    def get_channel(self):
+        return ":".join([self.src,str(self.srcport),self.dst,str(self.dstport),self.hostname if self.hostname else "undefined", ','.join(self.tags)])
