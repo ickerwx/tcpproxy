@@ -10,6 +10,12 @@ import select
 import errno
 import queue
 import ssl
+import json
+from urllib.parse import urlparse
+try:
+    import redis
+except Exception:
+    pass
 
 # ConnData is an object that contains basic information about the connection.
 # Plugins can also use this object to exchange connection or status information.
@@ -74,6 +80,9 @@ def parse_args():
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
                         help='Print help of selected module')
 
+    parser.add_argument('-r', '--rules', dest='rules', default=None,
+                        help='Use a json module ruleset loaded from an URL instead of -im or -om')
+
     return parser.parse_args()
 
 def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
@@ -91,6 +100,67 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
         connection_warning("none","Cannot load module %s: %s" % (name,str(ex)), args, conn_obj)
         return None
         #sys.exit(3)
+
+class RulesLoader():
+    __instance = None
+    uri = None
+
+    @staticmethod
+    def getInstance():
+        if RulesLoader.__instance == None:
+            RulesLoader()
+        return RulesLoader.__instance
+
+    def __init__(self):
+        if RulesLoader.__instance != None:
+            raise Exception("This class is a singleton!")
+        else:
+            RulesLoader.__instance = self
+
+    def setup(self, args):
+        try:
+            self.uri = urlparse(args.rules)
+        except Exception as ex:
+            connection_failed("none", "Invalid URI provided for loading ruleset: %s" % str(ex), args)
+            sys.exit(1)
+            print(uri)
+
+        if self.uri.scheme in ["http", "https"]:
+            connection_failed("none", "Loading ruleset from http/https is not implemented", args)
+            sys.exit(1)
+
+        elif self.uri.scheme in ["redis", "rediss", "unix"]:
+            if "redis" not in sys.modules:
+                connection_failed("none", "Dependency redis not present. Impossible to load specified ruleset", args)
+                sys.exit(1)
+            self.redis_pool = redis.ConnectionPool.from_url(self.uri.geturl())
+            self.redis = redis.Redis(connection_pool=self.redis_pool)
+            self.handler = "redis"
+
+        elif self.uri.scheme in ["file"]:
+            connection_failed("none", "Loading ruleset from file is not implemented", args)
+            sys.exit(1)
+
+        else:
+            connection_failed("none","Invalid URI sheme %s for loading ruleset" % url.scheme, args)
+            sys.exit(1)
+
+    def read(self, args, conn):
+        if self.handler == "redis":
+            try:
+                rules = self.redis.get("rules")
+            except Exception as ex:
+                connection_failed("none", "Failed to connect to redis to retrieve rules: %s" % str(ex), args, conn)
+                return {}
+
+            if not rules:
+                return {}
+
+            try:
+                rules = json.loads(rules)
+                return rules
+            except Exception as ex:
+                connection_failed("none", "Failed to decode rules json: %s" % str(ex), args, conn)
 
 def generate_module_list(namelist, args, incoming=False):
     # This method receives a list of modules name, imports the modules
@@ -149,6 +219,50 @@ def get_modules_list():
                 mlist[mname] += mhelp
 
     return mlist
+
+# Find if a value is a a given range (eg: 5 is not in 1-4,6)
+def inrange(strrange, value):
+    for subrange in strrange.split(","):
+        subrange = subrange.split("-")
+        if len(subrange) == 1 and int(value) == int(subrange[0]):
+          return True
+        elif len(subrange) == 2 and int(value) in range(int(subrange[0]),int(subrange[1])):
+          return True
+    return False
+
+# Load module list related to the given current connection
+# The modules and options are loaded depending on a rule
+# dictionnary list in the following form:
+# [{"src":".*","dst":".*","hostname":".*","dstport":"0-65535","c2s":True,"s2c":True,"rules":["stats"]}]
+# Note that the order for rules matters
+def load_modules_from_rules(args, rules, conn):
+    in_modules = []
+    out_modules = []
+    for rule in rules:
+        if (re.match(rule['src'], conn.src) and
+                re.match(rule['dst'],conn.dst) and
+                ("dstport" not in rule or inrange(rule['dstport'],conn.dstport)) and
+                ("srcport" not in rule or inrange(rule['srcport'],conn.srcport))):
+
+            # Note that we cannot match on hostname at this point
+            # because hostname is discovered during peek operations
+            # so we will preload a matcher inside the module
+            if 'hostname' in rule and rule['hostname']:
+                prematch = re.compile(rule['hostname'])
+            else:
+                prematch = None
+            if rule['c2s']:
+                for r in rule['rules']:
+                    mod = load_module(r, args, incoming=False, prematch=prematch, conn_obj=conn)
+                    if mod:
+                        out_modules.append(mod)
+            if rule['s2c']:
+                for r in rule['rules']:
+                    mod = load_module(r, args, incoming=True, prematch=prematch, conn_obj=conn)
+                    if mod:
+                        in_modules.append(mod)
+
+    return (out_modules, in_modules)
 
 def list_modules():
     # show all available proxy modules
@@ -272,6 +386,10 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     if (conn_obj.dst == args.listen_ip and conn_obj.dstport == args.listen_port):
         connection_failed("server",  "Attempt to connect to TCPProxy itself cancelled",  args,  conn_obj)
         return None
+
+    # Reload ruleset for each connection (in case the ruleset is changed)
+    if args.rules:
+        out_modules, in_modules = load_modules_from_rules(args, RulesLoader.getInstance().read(args, conn_obj), conn_obj)
 
     try:
         remote_socket.connect((conn_obj.dst, conn_obj.dstport))
@@ -469,6 +587,11 @@ def main():
             sys.exit(2)
         else:
             args.target_ip = ip
+
+    if args.rules:
+        # Prepare the rule loader
+        loader =  RulesLoader()
+        loader.setup(args)
 
     # Generate requested 'in' modules list
     # Append specific modules required by
