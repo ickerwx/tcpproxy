@@ -94,10 +94,10 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
             mod.prematch = prematch
             return mod
         else:
-            connection_warning("none","Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
+            connection_warning(None,"Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
             return None
     except ImportError as ex:
-        connection_warning("none","Cannot load module %s: %s" % (name,str(ex)), args, conn_obj)
+        connection_warning(None,"Cannot load module %s: %s" % (name,str(ex)), args, conn_obj)
         return None
         #sys.exit(3)
 
@@ -121,16 +121,16 @@ class RulesLoader():
         try:
             self.uri = urlparse(args.rules)
         except Exception as ex:
-            connection_failed("none", "Invalid URI provided for loading ruleset: %s" % str(ex), args)
+            connection_failed(None, "Invalid URI provided for loading ruleset: %s" % str(ex), args)
             sys.exit(1)
 
         if self.uri.scheme in ["http", "https"]:
-            connection_failed("none", "Loading ruleset from http/https is not implemented", args)
+            connection_failed(None, "Loading ruleset from http/https is not implemented", args)
             sys.exit(1)
 
         elif self.uri.scheme in ["redis", "rediss", "unix"]:
             if "redis" not in sys.modules:
-                connection_failed("none", "Dependency redis not present. Impossible to load specified ruleset", args)
+                connection_failed(None, "Dependency redis not present. Impossible to load specified ruleset", args)
                 sys.exit(1)
 
             # Create a redis connection pool and client
@@ -146,11 +146,11 @@ class RulesLoader():
                 self.redis.set("module:%s:help"%key, value)
 
         elif self.uri.scheme in ["file"]:
-            connection_failed("none", "Loading ruleset from file is not implemented", args)
+            connection_failed(None, "Loading ruleset from file is not implemented", args)
             sys.exit(1)
 
         else:
-            connection_failed("none","Invalid URI sheme %s for loading ruleset" % url.scheme, args)
+            connection_failed(None,"Invalid URI sheme %s for loading ruleset" % url.scheme, args)
             sys.exit(1)
 
     def read(self, args, conn):
@@ -158,7 +158,7 @@ class RulesLoader():
             try:
                 rules = self.redis.get('rules')
             except Exception as ex:
-                connection_failed("none", "Failed to connect to redis to retrieve rules: %s" % str(ex), args, conn)
+                connection_failed(None, "Failed to connect to redis to retrieve rules: %s" % str(ex), args, conn)
                 return {}
 
             if not rules:
@@ -168,7 +168,7 @@ class RulesLoader():
                 rules = json.loads(rules)
                 return rules
             except Exception as ex:
-                connection_failed("none", "Failed to decode rules json: %s" % str(ex), args, conn)
+                connection_failed(None, "Failed to decode rules json: %s" % str(ex), args, conn)
 
 def generate_module_list(namelist, args, incoming=False):
     # This method receives a list of modules name, imports the modules
@@ -199,7 +199,7 @@ def parse_module_options(n,  args, conn_obj):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            connection_warning("none","Argument %s for module %s is not valid" % (op, name), args, conn_obj)
+            connection_warning(None,"Argument %s for module %s is not valid" % (op, name), args, conn_obj)
             #sys.exit(23)
     return name, options
 
@@ -321,7 +321,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"execute") and callable(m.execute):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                vprint(("> > > > in: " if incoming else "< < < < out: ") + m.name, args.verbose)
+                connection_info("in" if incoming else "out", "execute %s" % m.name, args)
                 try:
                     if args.no_chain_modules:
                         m.execute(data)
@@ -329,6 +329,8 @@ def handle_data(data, modules, args, incoming, conn_obj):
                         data = m.execute(data)
                 except Exception as ex:
                     connection_failed(m.name,ex.__str__(),args,conn_obj)
+                    import traceback
+                    traceback.print_exc()
 
     return data
 
@@ -339,7 +341,7 @@ def peek_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"peek") and callable(m.peek):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                vprint(("> > > > in " if incoming else "< < < < out ") + m.name + " peek", args.verbose)
+                connection_info("in" if incoming else "out", "peek %s" % m.name, args)
                 if args.no_chain_modules:
                     m.peek(data)
                 else:
@@ -353,16 +355,16 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"wrap") and callable(m.wrap):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                vprint(("> > > > in: " if incoming else "< < < < out ") + m.name + " wrap", args.verbose)
+                connection_info("in" if incoming else "out", "wrap %s" % m.name, args)
                 try:
                     if args.no_chain_modules:
                         m.wrap(sock)
                     else:
                         if "remote_socket" in wraps:
-                            vprint("Wrap remote socket following last wrap", args.verbose)
+                            # Wrap remote socket following last wrap
                             sock = [wraps["remote_socket"],sock[1],sock[2]]
                         if "local_socket" in wraps:
-                            vprint("Wrap local socket following last wrap", args.verbose)
+                            # Wrap remote socket following last wrap
                             sock = [wraps[0],wraps["local_socket"],sock[2]]
                         wraps.update(m.wrap(sock))
                 except Exception as ex:
@@ -387,7 +389,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
             dest_socket=local_socket
         )
     except Exception as err:
-        connection_failed("none",  err.__str__(),  args)
+        connection_failed(None,  err.__str__(),  args)
         return None
 
     # TODO improve error check by verifying all Local IP addresses (if listen_ip is not used)
@@ -401,8 +403,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
 
     try:
         remote_socket.connect((conn_obj.dst, conn_obj.dstport))
-        vprint('Connected to %s:%d' % remote_socket.getpeername(), args.verbose)
-        log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
+        connection_info(None, "Connected to %s:%d" % remote_socket.getpeername(), args)
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
             connection_failed("server","connection refused", args, conn_obj)
@@ -442,12 +443,16 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
             else:
                 peeks = peek_data(firstbytes, in_modules, args, sock==remote_socket,  conn_obj)
 
+            connection_info(None, "Peeks: %s" % str(peeks), args, conn_obj)
+    
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
             if sock == local_socket:
                 wraps = wrap_socket([remote_socket, local_socket, sock], out_modules, args, sock==remote_socket, conn_obj)
             else:
                 wraps = wrap_socket([remote_socket, local_socket, sock], in_modules, args, sock==remote_socket, conn_obj)
+
+            connection_info(None, "Wraps: %s" % str(wraps), args, conn_obj)
 
             # Retrieve the last wrapped socket in the chain as our "normal" socket
             if "local_socket" in wraps:
@@ -486,8 +491,7 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
             )
             remote_socket.send(data.encode() if isinstance(data, str) else data)
         else:
-            vprint("Connection from local client %s:%d closed" % peer, args.verbose)
-            log(args.logfile, "Connection from local client %s:%d closed" % peer)
+            connection_info(None, "Connection from local client %s:%d closed" % peer, args)
             remote_socket.close()
             return False
 
@@ -501,16 +505,16 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
             )
             local_socket.send(data)
         else:
-            vprint("Connection to remote server %s:%d closed" % peer, args.verbose)
-            log(args.logfile, "Connection to remote server %s:%d closed" % peer)
+            connection_info(None, "Connection to remote server %s:%d closed" % peer, args)
             local_socket.close()
             return False
 
     return True
 
+# TODO: switch log, verbose, connection_warning, connection_failed to usage of python logging (with log levels and optional file factory)
 def connection_failed(direction, msg, args, conn_obj=None):
     if conn_obj:
-        error_msg = '%s FAILED for connection to %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
+        error_msg = 'FAILED: for connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
         error_msg = 'FAILED: %s' % (msg)
     print(error_msg)
@@ -518,11 +522,20 @@ def connection_failed(direction, msg, args, conn_obj=None):
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = '%s WARNING while connecting to %s:%d - %s' % (direction, conn_obj.dst, conn_obj.dstport, msg)
+        warning_msg = 'WARNING: while connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
         warning_msg = 'WARNING: %s' % (msg)
     print(warning_msg)
     log(args.logfile, warning_msg)
+
+def connection_info(direction, msg, args, conn_obj=None):
+    if conn_obj:
+        info_msg = 'INFO: connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+    else:
+        info_msg = 'INFO: %s' % msg
+    if args.verbose:
+        print(info_msg)
+        log(args.logfile, info_msg)
 
 def log(handle, message, message_only=False):
     # if message_only is True, only the message will be logged
@@ -540,13 +553,6 @@ def log(handle, message, message_only=False):
     if not message_only:
         logentry += b'\n' + b'-' * 20 + b'\n'
     handle.write(logentry)
-
-
-def vprint(msg, is_verbose):
-    # this will print msg, but only if is_verbose is True
-    if is_verbose:
-        print(msg)
-
 
 def main():
     args = parse_args()
@@ -641,25 +647,24 @@ def main():
     try:
         while True:
             in_socket, in_addrinfo = proxy_socket.accept()
-            vprint('Connection from %s:%d' % in_addrinfo, args.verbose)
-            log(args.logfile, 'Connection from %s:%d' % in_addrinfo)
+            connection_info(None, "Connection from %s:%d" % in_addrinfo, args)
             proxy_thread = threading.Thread(target=start_proxy_thread,
                                             args=(running,  in_socket, args, in_modules,
                                                   out_modules))
-            log(args.logfile, "Starting proxy thread " + proxy_thread.name)
+            connection_info(None, "Starting proxy thread %s " % str(proxy_thread.name), args)
             proxy_thread.start()
             threads.append(proxy_thread)
     except KeyboardInterrupt:
-        log(args.logfile, 'Ctrl+C detected, exiting...')
         print('\nCtrl+C detected, exiting...')
+        connection_info(None, "Ctrl+C detected, exiting...", args)
         running.put(True)
         for thread in threads:
-            print("Killing thread",thread.ident,"...",)
+            connection_info(None, "Killing thread %s..." % str(thread.ident), args)
             if thread.is_alive():
                 thread.join()
-                print("killed.")
+                connection_info(None, "Thread %s killed." % str(thread.ident), args)
             else:
-                print("already dead.")
+                connection_info(None, "Thread %s already dead." % str(thread.ident), args)
         sys.exit(0)
 
 
