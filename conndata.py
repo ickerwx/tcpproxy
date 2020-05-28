@@ -95,3 +95,6 @@ class ConnData:
 
     def get_channel(self):
         return ":".join([self.src,str(self.srcport),self.dst,str(self.dstport),self.hostname if self.hostname else "undefined", ','.join(self.tags)])
+
+    def get_short_hash(self):
+        return ":".join([self.src,self.dst,str(self.dstport),self.hostname if self.hostname else "undefined", ','.join(self.tags)])
