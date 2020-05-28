@@ -76,7 +76,10 @@ class ConnData:
         return res
 
     def set_hostname(self, hostname):
-        self.hostname = hostname
+        if isinstance(hostname, bytes):
+            self.hostname = hostname.decode("utf-8")
+        else:
+            self.hostname = hostname
 
     def add_tag(self, tag):
         self.tags |= set([tag])
