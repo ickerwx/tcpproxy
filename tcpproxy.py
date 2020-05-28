@@ -365,7 +365,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
                             sock = [wraps["remote_socket"],sock[1],sock[2]]
                         if "local_socket" in wraps:
                             # Wrap remote socket following last wrap
-                            sock = [wraps[0],wraps["local_socket"],sock[2]]
+                            sock = [sock[0],wraps["local_socket"],sock[2]]
                         wraps.update(m.wrap(sock))
                 except Exception as ex:
                     connection_failed(m.name+" wrapping",ex.__str__(), args, conn_obj)
