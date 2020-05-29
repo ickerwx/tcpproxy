@@ -381,6 +381,9 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # passing it on.
     remote_socket = socket.socket()
 
+    # Set timeout to 5 seconds to get faster failure feedback
+    #remote_socket.settimeout(5)
+
     # Create conn obj based on known information about the connection.
     try:
         conn_obj = ConnData(
