@@ -267,7 +267,21 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             read_sockets, _, _ = select.select(ssl_sockets, [], [])
 
         for sock in read_sockets:
-            peer = sock.getpeername()
+            try:
+                peer = sock.getpeername()
+            except socket.error as serr:
+                if serr.errno == errno.ENOTCONN:
+                    # kind of a blind shot at fixing issue #15
+                    # I don't yet understand how this error can happen, but if it happens I'll just shut down the thread
+                    # the connection is not in a useful state anymore
+                    for s in [remote_socket, local_socket]:
+                        s.close()
+                    running = False
+                    break
+                else:
+                    print(f"{time.strftime('%Y%m%d-%H%M%S')}: Socket exception in start_proxy_thread")
+                    raise serr
+
             data = receive_from(sock)
             log(args.logfile, 'Received %d bytes' % len(data))
 
@@ -395,7 +409,7 @@ def main():
         print(e.strerror)
         sys.exit(5)
 
-    proxy_socket.listen(10)
+    proxy_socket.listen(100)
     log(args.logfile, str(args))
     # endless loop until ctrl+c
     try:
