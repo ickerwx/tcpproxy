@@ -238,14 +238,38 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
     except socket.error as serr:
         if serr.errno == errno.ECONNREFUSED:
-            print('%s:%d - Connection refused' % (args.target_ip, args.target_port))
-            log(args.logfile, '%s:%d - Connection refused' % (args.target_ip, args.target_port))
+            for s in [remote_socket, local_socket]:
+                s.close()
+            print(f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection refused')
+            log(args.logfile, f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection refused')
+            return None
+        elif serr.errno == errno.ETIMEDOUT:
+            for s in [remote_socket, local_socket]:
+                s.close()
+            print(f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection timed out')
+            log(args.logfile, f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection timed out')
             return None
         else:
+            for s in [remote_socket, local_socket]:
+                s.close()
             raise serr
 
-    update_module_hosts(out_modules, local_socket.getpeername(), remote_socket.getpeername())
-    update_module_hosts(in_modules, remote_socket.getpeername(), local_socket.getpeername())
+    try:
+        update_module_hosts(out_modules, local_socket.getpeername(), remote_socket.getpeername())
+        update_module_hosts(in_modules, remote_socket.getpeername(), local_socket.getpeername())
+    except socket.error as serr:
+        if serr.errno == errno.ENOTCONN:
+            # kind of a blind shot at fixing issue #15
+            # I don't yet understand how this error can happen, but if it happens I'll just shut down the thread
+            # the connection is not in a useful state anymore
+            for s in [remote_socket, local_socket]:
+                s.close()
+            return None
+        else:
+            for s in [remote_socket, local_socket]:
+                s.close()
+            print(f"{time.strftime('%Y%m%d-%H%M%S')}: Socket exception in start_proxy_thread")
+            raise serr
 
     # This loop ends when no more data is received on either the local or the
     # remote socket
