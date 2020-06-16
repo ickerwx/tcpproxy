@@ -206,25 +206,34 @@ def is_client_hello(sock):
 
 
 def enable_ssl(args, remote_socket, local_socket):
+    sni = None
+
+    def sni_callback(sock, name, ctx):
+        nonlocal sni
+        sni = name
+
     try:
-        local_socket = ssl.wrap_socket(local_socket,
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ctx.sni_callback = sni_callback
+        ctx.load_cert_chain(certfile=args.server_certificate,
+                            keyfile=args.server_key,
+                            )
+        local_socket = ctx.wrap_socket(local_socket,
                                        server_side=True,
-                                       certfile=args.server_certificate,
-                                       keyfile=args.server_key,
-                                       ssl_version=ssl.PROTOCOL_TLSv1_2,
                                        )
     except ssl.SSLError as e:
         print("SSL handshake failed for listening socket", str(e))
         raise
 
     try:
+        ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         if args.client_certificate and args.client_key:
-            remote_socket = ssl.wrap_socket(remote_socket,
-                                            certfile=args.client_certificate,
-                                            keyfile=args.client_key,
-                                            )
-        else:
-            remote_socket = ssl.wrap_socket(remote_socket)
+            ctx.load_cert_chain(certfile=args.client_certificate,
+                                keyfile=args.client_key,
+                                )
+        remote_socket = ctx.wrap_socket(remote_socket,
+                                        server_hostname=sni,
+                                        )
     except ssl.SSLError as e:
         print("SSL handshake failed for remote socket", str(e))
         raise
