@@ -63,7 +63,7 @@ class BaseModule:
         if len(self.dependencies) > 0:
             self.log_trace("inhibited because module is missing some dependencies (%s)" % ",".join(list(set(self.dependencies))))
             return True
-        if self.prematch != None:
+        if self.prematch != None and self.conn.hostname != None:
             if not self.conn or not self.conn.hostname or not self.prematch.match(self.conn.hostname):
                 self.log_trace("inhibited because hostname does not match rule")
                 return True
