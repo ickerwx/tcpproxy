@@ -31,26 +31,26 @@ def parse_args():
                                                  'the intercepted traffic.')
 
     parser.add_argument('-ti', '--targetip', dest='target_ip',
-                        help='remote target IP or host name')
+                        help='remote target IP or host name.')
 
     parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
-                        help='remote target port')
+                        help='remote target port.')
 
     parser.add_argument('-li', '--listenip', dest='listen_ip',
                         default='0.0.0.0', help='IP address/host name to listen for ' +
-                        'incoming data')
+                        'incoming data.')
 
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
-                        default=8080, help='port to listen on')
+                        default=8080, help='port to listen on.')
 
     parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
-                        help='IP address/host name of proxy')
+                        help='IP address/host name of proxy.')
 
     parser.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
-                        default=1080, help='proxy port', )
+                        default=1080, help='proxy port.')
 
     parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
-                        help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
+                        type = str.upper, help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP.')
 
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
@@ -62,24 +62,24 @@ def parse_args():
 
     parser.add_argument('-v', '--verbose', dest='verbose', default=False,
                         action='store_true',
-                        help='More verbose output of status information')
+                        help='More verbose output of status information.')
 
     parser.add_argument('-n', '--no-chain', dest='no_chain_modules',
                         action='store_true', default=False,
                         help='Don\'t send output from one module to the ' +
-                             'next one')
+                             'next one.')
 
     parser.add_argument('-l', '--log', dest='logfile', default=None,
                         help='Log all data to a file before modules are run.')
 
     parser.add_argument('--list', dest='list', action='store_true',
-                        help='list available modules')
+                        help='list available modules.')
 
     parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
-                        help='Print help of selected module')
+                        help='Print help of selected module.')
 
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
-                        default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
+                        default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem.')
 
     return parser.parse_args()
 
