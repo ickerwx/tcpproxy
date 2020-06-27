@@ -75,6 +75,9 @@ class ConnData:
 
         return res
 
+    def __str__(self):
+        return "Connection %s:%d > %s:%d(%s) tags:%s" % (self.src,self.srcport,self.dst,self.dstport,self.hostname if self.hostname else "unknown", ",".join(self.tags) if self.tags else "None")
+
     def set_hostname(self, hostname):
         if isinstance(hostname, bytes):
             self.hostname = hostname.decode("utf-8")
