@@ -56,6 +56,7 @@ class Module(BaseModule):
                 new_sock.connect((self.conn.hostname, self.conn.dstport))
             else:
                 new_sock.connect((self.conn.dst, self.conn.dstport))
+            self.redirected = True
             self.conn.add_tag("proxy")
             return {"remote_socket":new_sock}
         except socks.ProxyConnectionError as ex:
