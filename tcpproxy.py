@@ -79,7 +79,19 @@ def parse_args():
                         help='Print help of selected module')
 
     parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
-                        default=False, help='detect SSL/TLS as well as STARTTLS, certificate is mitm.pem')
+                        default=False, help='detect SSL/TLS as well as STARTTLS')
+
+    parser.add_argument('-sc', '--server-certificate', default='mitm.pem',
+                        help='server certificate in PEM format (default: %(default)s)')
+
+    parser.add_argument('-sk', '--server-key', default='mitm.pem',
+                        help='server key in PEM format (default: %(default)s)')
+
+    parser.add_argument('-cc', '--client-certificate', default=None,
+                        help='client certificate in PEM format in case client authentication is required by the target')
+
+    parser.add_argument('-ck', '--client-key', default=None,
+                        help='client key in PEM format in case client authentication is required by the target')
 
     return parser.parse_args()
 
@@ -193,20 +205,35 @@ def is_client_hello(sock):
             )
 
 
-def enable_ssl(remote_socket, local_socket):
+def enable_ssl(args, remote_socket, local_socket):
+    sni = None
+
+    def sni_callback(sock, name, ctx):
+        nonlocal sni
+        sni = name
+
     try:
-        local_socket = ssl.wrap_socket(local_socket,
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ctx.sni_callback = sni_callback
+        ctx.load_cert_chain(certfile=args.server_certificate,
+                            keyfile=args.server_key,
+                            )
+        local_socket = ctx.wrap_socket(local_socket,
                                        server_side=True,
-                                       certfile="mitm.pem",
-                                       keyfile="mitm.pem",
-                                       ssl_version=ssl.PROTOCOL_TLSv1_2,
                                        )
     except ssl.SSLError as e:
         print("SSL handshake failed for listening socket", str(e))
         raise
 
     try:
-        remote_socket = ssl.wrap_socket(remote_socket)
+        ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        if args.client_certificate and args.client_key:
+            ctx.load_cert_chain(certfile=args.client_certificate,
+                                keyfile=args.client_key,
+                                )
+        remote_socket = ctx.wrap_socket(remote_socket,
+                                        server_hostname=sni,
+                                        )
     except ssl.SSLError as e:
         print("SSL handshake failed for remote socket", str(e))
         raise
@@ -279,7 +306,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
 
         if starttls(args, local_socket, read_sockets):
             try:
-                ssl_sockets = enable_ssl(remote_socket, local_socket)
+                ssl_sockets = enable_ssl(args, remote_socket, local_socket)
                 remote_socket, local_socket = ssl_sockets
                 vprint("SSL enabled", args.verbose)
                 log(args.logfile, "SSL enabled")
@@ -374,6 +401,10 @@ def main():
         if not args.target_port:
             print('Target port is required: -tp')
             sys.exit(7)
+
+    if ((args.client_key is None) ^ (args.client_certificate is None)):
+        print("You must either specify both the client certificate and client key or leave both empty")
+        sys.exit(8)
 
     if args.logfile is not None:
         try:
