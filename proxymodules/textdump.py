@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os.path as path
-from codecs import decode
+from codecs import decode, lookup
 
 
 class Module:
@@ -10,6 +10,7 @@ class Module:
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
         self.find = None  # if find is not None, this text will be highlighted
+        self.codec = 'latin_1'
         if options is not None:
             if 'find' in options.keys():
                 self.find = bytes(options['find'], 'ascii')  # text to highlight
@@ -17,13 +18,21 @@ class Module:
                 self.color = bytes('\033[' + options['color'] + 'm', 'ascii')  # highlight color
             else:
                 self.color = b'\033[31;1m'
+            if 'codec' in options.keys():
+                codec = options['codec']
+                try:
+                    lookup(codec)
+                    self.codec = codec
+                except LookupError:
+                    print(f"{self.name}: {options['codec']} is not a valid codec, using {self.codec}")
+
 
     def execute(self, data):
         if self.find is None:
-            print(repr(decode(data, 'raw_unicode_escape')))
+            print(decode(data, self.codec))
         else:
             pdata = data.replace(self.find, self.color + self.find + b'\033[0m')
-            print(repr(decode(pdata, 'raw_unicode_escape')))
+            print(decode(pdata, self.codec))
         return data
 
     def help(self):
