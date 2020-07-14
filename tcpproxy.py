@@ -50,7 +50,7 @@ def parse_args():
                         default=1080, help='proxy port', )
 
     parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
-                        help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
+                        type = str.upper, help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
 
     parser.add_argument('-om', '--outmodules', dest='out_modules',
                         help='comma-separated list of modules to modify data' +
