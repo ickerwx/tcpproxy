@@ -1,15 +1,21 @@
 #!/usr/bin/env  python3
 import argparse
-import pkgutil
+import errno
 import os
+import pkgutil
+import select
+import socket
+import ssl
 import sys
 import threading
-import socket
-import socks
-import ssl
 import time
-import select
-import errno
+
+try:
+    import socks
+except ModuleNotFoundError:
+    print('Please install "PySocks" module.')
+    exit()
+
 
 # TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
@@ -30,68 +36,72 @@ def parse_args():
                                                  'Select modules to handle ' +
                                                  'the intercepted traffic.')
 
-    parser.add_argument('-ti', '--targetip', dest='target_ip',
-                        help='remote target IP or host name')
+    # Required args
+    args_required = parser.add_argument_group('Required arguments')
+    args_required.add_argument('-ti', '--targetip', dest='target_ip', required=True,
+                               help='remote target IP or host name')
 
-    parser.add_argument('-tp', '--targetport', dest='target_port', type=int,
-                        help='remote target port')
+    args_required.add_argument('-tp', '--targetport', dest='target_port', required=True, type=int,
+                               help='remote target port')
 
-    parser.add_argument('-li', '--listenip', dest='listen_ip',
-                        default='0.0.0.0', help='IP address/host name to listen for ' +
-                        'incoming data')
+    # Optional args
+    args_optional = parser.add_argument_group('Optional arguments')
+    args_optional.add_argument('-li', '--listenip', dest='listen_ip',
+                               default='0.0.0.0', help='IP address/host name to listen for ' +
+                                                       'incoming data')
 
-    parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
-                        default=8080, help='port to listen on')
+    args_optional.add_argument('-lp', '--listenport', dest='listen_port', type=int,
+                               default=8080, help='port to listen on (default: %(default)s)')
 
-    parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
-                        help='IP address/host name of proxy')
+    args_optional.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
+                               help='IP address/host name of proxy')
 
-    parser.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
-                        default=1080, help='proxy port', )
+    args_optional.add_argument('-pp', '--proxy-port', dest='proxy_port', type=int,
+                               default=1080, help='proxy port (default: %(default)s)')
 
-    parser.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5', choices=['SOCKS4', 'SOCKS5', 'HTTP'],
-                        type = str.upper, help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
+    args_optional.add_argument('-pt', '--proxy-type', dest='proxy_type', default='SOCKS5',
+                               choices=['SOCKS4', 'SOCKS5', 'HTTP'],
+                               type=str.upper, help='proxy type. Options are SOCKS5 (default), SOCKS4, HTTP')
 
-    parser.add_argument('-om', '--outmodules', dest='out_modules',
-                        help='comma-separated list of modules to modify data' +
-                             ' before sending to remote target.')
+    args_optional.add_argument('-om', '--outmodules', dest='out_modules',
+                               help='comma-separated list of modules to modify data' +
+                                    ' before sending to remote target.')
 
-    parser.add_argument('-im', '--inmodules', dest='in_modules',
-                        help='comma-separated list of modules to modify data' +
-                             ' received from the remote target.')
+    args_optional.add_argument('-im', '--inmodules', dest='in_modules',
+                               help='comma-separated list of modules to modify data' +
+                                    ' received from the remote target.')
 
-    parser.add_argument('-v', '--verbose', dest='verbose', default=False,
-                        action='store_true',
-                        help='More verbose output of status information')
+    args_optional.add_argument('-v', '--verbose', dest='verbose', default=False,
+                               action='store_true',
+                               help='More verbose output of status information')
 
-    parser.add_argument('-n', '--no-chain', dest='no_chain_modules',
-                        action='store_true', default=False,
-                        help='Don\'t send output from one module to the ' +
-                             'next one')
+    args_optional.add_argument('-n', '--no-chain', dest='no_chain_modules',
+                               action='store_true', default=False,
+                               help='Don\'t send output from one module to the next one')
 
-    parser.add_argument('-l', '--log', dest='logfile', default=None,
-                        help='Log all data to a file before modules are run.')
+    args_optional.add_argument('-l', '--log', dest='logfile', default=None,
+                               help='Log all data to a file before modules are run.')
 
-    parser.add_argument('--list', dest='list', action='store_true',
-                        help='list available modules')
+    args_optional.add_argument('--list', dest='list', action='store_true',
+                               help='list available modules')
 
-    parser.add_argument('-lo', '--list-options', dest='help_modules', default=None,
-                        help='Print help of selected module')
+    args_optional.add_argument('-lo', '--list-options', dest='help_modules', default=None,
+                               help='Print help of selected module')
 
-    parser.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
-                        default=False, help='detect SSL/TLS as well as STARTTLS')
+    args_optional.add_argument('-s', '--ssl', dest='use_ssl', action='store_true',
+                               default=False, help='detect SSL/TLS as well as STARTTLS')
 
-    parser.add_argument('-sc', '--server-certificate', default='mitm.pem',
-                        help='server certificate in PEM format (default: %(default)s)')
+    args_optional.add_argument('-sc', '--server-certificate', default='mitm.pem',
+                               help='server certificate in PEM format (default: %(default)s)')
 
-    parser.add_argument('-sk', '--server-key', default='mitm.pem',
-                        help='server key in PEM format (default: %(default)s)')
+    args_optional.add_argument('-sk', '--server-key', default='mitm.pem',
+                               help='server key in PEM format (default: %(default)s)')
 
-    parser.add_argument('-cc', '--client-certificate', default=None,
-                        help='client certificate in PEM format in case client authentication is required by the target')
+    args_optional.add_argument('-cc', '--client-certificate', default=None,
+                               help='client certificate in PEM format in case client authentication is required by the target')
 
-    parser.add_argument('-ck', '--client-key', default=None,
-                        help='client key in PEM format in case client authentication is required by the target')
+    args_optional.add_argument('-ck', '--client-key', default=None,
+                               help='client key in PEM format in case client authentication is required by the target')
 
     return parser.parse_args()
 
@@ -268,13 +278,15 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
             for s in [remote_socket, local_socket]:
                 s.close()
             print(f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection refused')
-            log(args.logfile, f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection refused')
+            log(args.logfile,
+                f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection refused')
             return None
         elif serr.errno == errno.ETIMEDOUT:
             for s in [remote_socket, local_socket]:
                 s.close()
             print(f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection timed out')
-            log(args.logfile, f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection timed out')
+            log(args.logfile,
+                f'{time.strftime("%Y%m%d-%H%M%S")}, {args.target_ip}:{args.target_port}- Connection timed out')
             return None
         else:
             for s in [remote_socket, local_socket]:
@@ -394,15 +406,8 @@ def vprint(msg, is_verbose):
 
 def main():
     args = parse_args()
-    if args.list is False and args.help_modules is None:
-        if not args.target_ip:
-            print('Target IP is required: -ti')
-            sys.exit(6)
-        if not args.target_port:
-            print('Target port is required: -tp')
-            sys.exit(7)
 
-    if ((args.client_key is None) ^ (args.client_certificate is None)):
+    if (args.client_key is None) ^ (args.client_certificate is None):
         print("You must either specify both the client certificate and client key or leave both empty")
         sys.exit(8)
 
