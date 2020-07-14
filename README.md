@@ -233,3 +233,4 @@ I want to thank the following people for spending their valuable time and energy
 - [Stefan Grönke](https://github.com/gronke)
 - [Mattia](https://github.com/sowdust)
 - [bjorns163](https://github.com/bjorns163)
+- [Pernat1y](https://github.com/Pernat1y)
