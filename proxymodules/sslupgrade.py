@@ -192,8 +192,8 @@ class Module(BaseModuleRedis):
             # Serial need to be random to avoid SEC_ERROR_REUSED_ISSUER_AND_SERIAL especially when using CA
             cert.set_serial_number(randint(0,100000000000))
 
-            cert.gmtime_adj_notBefore(-100000)
-            cert.gmtime_adj_notAfter(100000)
+            cert.gmtime_adj_notBefore(-4320000)
+            cert.gmtime_adj_notAfter(4320000)
 
         elif mode in ["spoof", "caspoof"]:
             # Spoof the server Subject Organisation and CN
