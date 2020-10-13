@@ -83,6 +83,9 @@ def parse_args():
     parser.add_argument('-r', '--rules', dest='rules', default=None,
                         help='Use a json module ruleset loaded from an URL instead of -im or -om')
 
+    parser.add_argument('-t', '--timeout', dest='timeout', default=5,
+                        help='Specify server side timeout to get fast failure feedback (seconds)')
+
     return parser.parse_args()
 
 def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
@@ -381,8 +384,8 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # passing it on.
     remote_socket = socket.socket()
 
-    # Set timeout to 5 seconds to get faster failure feedback
-    #remote_socket.settimeout(5)
+    # Set timeout to 5 seconds by default to get faster failure feedback
+    remote_socket.settimeout(args.timeout)
 
     # Create conn obj based on known information about the connection.
     try:
