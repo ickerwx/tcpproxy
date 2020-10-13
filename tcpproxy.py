@@ -299,9 +299,9 @@ def update_module_hosts(modules, conn_obj):
                 m.set_connection(conn_obj)
             else:
                 if hasattr(m, 'source'):
-                    m.source = conn_obj.source
+                    m.source = conn_obj.src
                 if hasattr(m, 'destination'):
-                    m.destination = conn_obj.destination
+                    m.destination = conn_obj.dst
 
 def receive_from(s):
     # receive data from a socket until no more data is there
