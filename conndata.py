@@ -84,6 +84,9 @@ class ConnData:
         else:
             self.hostname = hostname
 
+        # In case of HTTP Proxy usage (CONNECT), hostname is composed of hostname:targetport. We normalize things there
+        self.hostname = self.hostname.split(":")[0]
+
     def add_tag(self, tag):
         self.tags |= set([tag])
 
