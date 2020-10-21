@@ -227,6 +227,8 @@ def enable_ssl(args, remote_socket, local_socket):
 
     try:
         ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         if args.client_certificate and args.client_key:
             ctx.load_cert_chain(certfile=args.client_certificate,
                                 keyfile=args.client_key,
