@@ -13,7 +13,8 @@ usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP]
                    [-lp LISTEN_PORT] [-pi PROXY_IP] [-pp PROXY_PORT]
                    [-pt {SOCKS4,SOCKS5,HTTP}] [-om OUT_MODULES]
                    [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list]
-                   [-lo HELP_MODULES] [-s]
+                   [-lo HELP_MODULES] [-s] [-sc SERVER_CERTIFICATE]
+                   [-sk SERVER_KEY] [-cc CLIENT_CERTIFICATE] [-ck CLIENT_KEY]
 
 Simple TCP proxy for data interception and modification. Select modules to
 handle the intercepted traffic.
@@ -47,8 +48,17 @@ optional arguments:
   --list                list available modules
   -lo HELP_MODULES, --list-options HELP_MODULES
                         Print help of selected module
-  -s, --ssl             detect SSL/TLS as well as STARTTLS, certificate is
-                        mitm.pem
+  -s, --ssl             detect SSL/TLS as well as STARTTLS
+  -sc SERVER_CERTIFICATE, --server-certificate SERVER_CERTIFICATE
+                        server certificate in PEM format (default: mitm.pem)
+  -sk SERVER_KEY, --server-key SERVER_KEY
+                        server key in PEM format (default: mitm.pem)
+  -cc CLIENT_CERTIFICATE, --client-certificate CLIENT_CERTIFICATE
+                        client certificate in PEM format in case client
+                        authentication is required by the target
+  -ck CLIENT_KEY, --client-key CLIENT_KEY
+                        client key in PEM format in case client authentication
+                        is required by the target
 ```
 
 You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
