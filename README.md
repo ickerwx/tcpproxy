@@ -3,7 +3,7 @@
 This tool opens a listening socket, receives data and then runs this data through a chain of proxy modules. After the modules are done, the resulting data is sent to the target server. The response is received and again run through a chain of modules before sending the final data back to the client.
 To intercept the data, you will either have to be the gateway or do some kind of man-in-the-middle attack. Set up iptables so that the PREROUTING chain will modify the destination and send it to the proxy process. The proxy will then send the data on to whatever target was specified.
 
-This tool is inspired by and partially based on the TCP proxy example used in Justin Seitz' book "Black Hat Python" by no starch press.
+This tool is inspired by and partially based on the TCP proxy example used in *Justin Seitz*' book **Black Hat Python**. Indeed, this is a fork of https://github.com/ickerwx/tcpproxy specifically modified for transparent proxying **OT** (Operational Technology) protocols like **MQTT**, **Modbus TCP**, **Siemens S7** (only S7COMM with magic = 0x32, 0x72 S7COMM_PLUS not supported yet), **Siemens Logo!** programming protocol. There is also a draft module of flexible **default** that permit you to create L7 content based filters/alerts (ala Snort/Suricata **content**). All of these modules read only the payload and audit it, so they can works as IDS/IPS (they can also close the connection).
 
 ## Usage
 
@@ -12,9 +12,11 @@ $ ./tcpproxy.py -h
 usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP]
                    [-lp LISTEN_PORT] [-pi PROXY_IP] [-pp PROXY_PORT]
                    [-pt {SOCKS4,SOCKS5,HTTP}] [-om OUT_MODULES]
-                   [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list]
+                   [-im IN_MODULES] [-n]
+                   [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--list]
                    [-lo HELP_MODULES] [-s] [-sc SERVER_CERTIFICATE]
                    [-sk SERVER_KEY] [-cc CLIENT_CERTIFICATE] [-ck CLIENT_KEY]
+                   [-od] [-f FILTERS] [-lc LOG_CONFIG]
 
 Simple TCP proxy for data interception and modification. Select modules to
 handle the intercepted traffic.
@@ -41,10 +43,9 @@ optional arguments:
   -im IN_MODULES, --inmodules IN_MODULES
                         comma-separated list of modules to modify data
                         received from the remote target.
-  -v, --verbose         More verbose output of status information
   -n, --no-chain        Don't send output from one module to the next one
-  -l LOGFILE, --log LOGFILE
-                        Log all data to a file before modules are run.
+  -l {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        Logging level (verbosity)
   --list                list available modules
   -lo HELP_MODULES, --list-options HELP_MODULES
                         Print help of selected module
@@ -59,42 +60,75 @@ optional arguments:
   -ck CLIENT_KEY, --client-key CLIENT_KEY
                         client key in PEM format in case client authentication
                         is required by the target
+  -od, --original-destination
+                        use SO_ORIGINAL_DST (if supported by OS) instead of
+                        static options -ti/-tp
+  -f FILTERS, --filters FILTERS
+                        IDS/IPS mode, specify a CSV file with alert/filters
+                        configurations for out modules
+  -lc LOG_CONFIG, --log-config LOG_CONFIG
+                        Logging configuration file (mutually exclusive with -l
+                        --loglevel)
 ```
 
-You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
-You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
+You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080 or to activate the option **-od/--original-destination** to let netfilter says the destination to the proxy (only works under Linux/netfilter). To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. **-im mod1,mod4,mod2**. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the **-n/--no-chain** switch. In that case, every module will receive the original data.
+You can also pass options to each module: **-im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2**. To learn which options you can pass to a module use **-lo/--list-options** like this: **-lo mod1,mod2,mod4**
+
+Nefilter setup for transparent proxy redirection and usage example:
+
+```bash
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner tcpproxy --dport 102 -j REDIRECT --to-port 9999
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner tcpproxy --dport 502 -j REDIRECT --to-port 9999
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner tcpproxy --dport 1883 -j REDIRECT --to-port 9999
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner tcpproxy --dport 8080 -j REDIRECT --to-port 9999
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner tcpproxy --dport 10005 -j REDIRECT --to-port 9999
+sudo -u tcpproxy ./tcpproxy.py -od -lp 9999 -n -im default,logo,modbus,mqtt,s7comm -om default,logo,modbus,mqtt,s7comm -l DEBUG -f filters.csv -lc logging.conf
+```
+
+## Changelog
+
+Detail of changes compared to https://github.com/ickerwx/tcpproxy
+
+    Python logging with DEBUG/INFO/WARNING/CRITICAL levels, complex logging configurable through logging.config python module.
+    Dynamic destination ip address using SO_ORIGINAL_DST
+    Optimized start_proxy_thread() for thread safety and speed. Source and destination passed as parameters to modules.
+    Added configurable filtering using CSV files.
+    Added checking for duplicate modules, so it can be used only one time in in or out direction; default module will be always the last one.
+    Added Snort/Suricata style actions like pass, drop, reject (TCP RST) and alert.
+    Added default module with configurable L7 payload ala Snort/Suricata "content"
+    Added multiple and configurable modules destination ports
 
 ## Modules
 
 ```
 $ ./tcpproxy.py --list
-digestdowngrade - Find HTTP Digest Authentication and replace it with a Basic Auth
-hexdump - Print a hexdump of the received data
-http_ok - Prepend HTTP response header
-http_post - Prepend HTTP header
-http_strip - Remove HTTP header from data
-javaxml - Serialization or deserialization of Java objects (needs jython)
-log - Log data in the module chain. Use in addition to general logging (-l/--log).
-removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
-replace - Replace text on the fly by using regular expressions in a file or as module parameters
-size - Print the size of the data passed to the module
-size404 - Change HTTP responses of a certain size to 404.
-textdump - Simply print the received data as text
+default - Default module (for L7 filtering ala Snort/Suricata "content")
+logo - Siemens Logo! module
+modbus - Modbus TCP module
+mqtt - MQTT module
+s7comm - Siemens S7 (0x32) module
 ```
 
-Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
+Tcpproxy.py uses modules to view or modify the intercepted data. This is an example module (a bit different from original ickerwx's):
 
 ```python
 #!/usr/bin/env python3
 import os.path as path
+import builtins
+import logging
+import threading
 
+logger = logging.getLogger(__name__)
 
-class Module:
-    def __init__(self, incoming=False, verbose=False, options=None):
+class Module(threading.local):
+    def __init__(self, incoming=False, loglevel=logging.INFO, options=None, filters=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]
         self.description = 'Simply print the received data as text'
         self.incoming = incoming  # incoming means module is on -im chain
+        self.filters = filters
+        logger.setLevel(loglevel)
+
         self.find = None  # if find is not None, this text will be highlighted
         if options is not None:
             if 'find' in options.keys():
@@ -104,7 +138,7 @@ class Module:
             else:
                 self.color = b'\033[31;1m'
 
-    def execute(self, data):
+    def execute(self, data, source, destination):
         if self.find is None:
             print(data)
         else:
@@ -123,124 +157,162 @@ if __name__ == '__main__':
     print('This module is not supposed to be executed alone!')
 ```
 
-Every module file contains a class named Module. Every module MUST set self.description and MUST implement an execute method that accepts one parameter, the input data. The execute method MUST return something, this something is then either passed to the next module or sent on. Other than that, you are free to do whatever you want inside a module.
-The incoming parameter in the constructor is set to True when the module is in the incoming chain (-im), otherwise it's False. This way, a module knows in which direction the data is flowing (credits to jbarg for this idea).
-The verbose parameter is set to True if the proxy is started with -v/--verbose.
-The options parameter is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a help() method. This method must return a string. Use one line per option, make sure each line starts with a \t character for proper indentation.
+Every module file contains a class named **Module**. Every module MUST set **self.description** and MUST implement an execute method that accepts three parameters, input data, source and destination address. The execute method MUST return something, this something is then either passed to the next module or sent on. You can also raise an exception to drop (**Drop** exception) or reset the connection (**Reject** exception); exceptions are defined in **filter.py** and can used importing **builtins** module.
+The **incoming** parameter in the constructor is set to True when the module is in the incoming chain (**-im**), otherwise it's False. Eventual defined filters are applied only where **incoming == False** (output direction, from proxy server to intended destination).
+There is no more a verbose parameter but there is a **loglevel** that can be set to loglevel.DEBUG/INFO/WARNING/ERROR/CRITICAL (option **-l/--log-level**), default is **INFO**.
+The option **parameter** is a dictionary with the keys and values passed to the module on the command line. Note that if you use the options dictionary in your module, you should also implement a **help()** method. This method must return a string. Use one line per option, make sure each line starts with a \t character for proper indentation.
+The option **filters** is an instance of **CSVFilter()** class defined in **filter.py**. It's used to read a list of rules (alert or pass/drop/reject) from a CSV file (option **-f/--filters**) and use them in output direction (**incoming == False**).
 
-See the hexdump module for an additional options example:
+To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
 
-```python
-#!/usr/bin/env python3
-import os.path as path
+## Filtering and alerting
 
+This fork of tcpproxy can actually works as an IDS/IPS, alerting or dropping/rejecting sessions. With the option **-f/--filters** you can optionally indicate a CSV file containing the rules.
 
-class Module:
-    def __init__(self, incoming=False, verbose=False, options=None):
-        # extract the file name from __file__. __file__ is proxymodules/name.py
-        self.name = path.splitext(path.basename(__file__))[0]
-        self.description = 'Print a hexdump of the received data'
-        self.incoming = incoming  # incoming means module is on -im chain
-        self.len = 16
-        if options is not None:
-            if 'length' in options.keys():
-                self.len = int(options['length'])
-
-    def help(self):
-        return '\tlength: bytes per line (int)'
-
-    def execute(self, data):
-        # -- 8< --- snip
-        for i in range(0, len(data), self.len):
-            s = data[i:i + self.len]
-        # # -- 8< --- snip
-
-if __name__ == '__main__':
-    print 'This module is not supposed to be executed alone!'
-```
-
-The above example should give you an idea how to make use of module parameters. A calling example would be:
+This is an example of some rules:
 
 ```
-./tcpproxy.py -om hexdump:length=8,http_post,hexdump:length=12 -ti 127.0.0.1 -tp 12345
-< < < < out: hexdump
-0000   77 6C 6B 66 6A 6C 77 71    wlkfjlwq
-0008   6B 66 6A 68 6C 6B 77 71    kfjhlkwq
-0010   6A 65 68 66 6C 6B 65 77    jehflkew
-0018   71 6A 66 68 6C 6B 65 77    qjfhlkew
-0020   71 6A 66 68 6C 6B 65 77    qjfhlkew
-0028   71 6A 66 6C 68 77 71 6B    qjflhwqk
-0030   65 6A 66 68 77 71 6C 6B    ejfhwqlk
-0038   65 6A 66 68 0A             ejfh.
-< < < < out: http_post
-< < < < out: hexdump
-0000   50 4F 53 54 20 2F 20 48 54 54 50 2F    POST / HTTP/
-000C   31 2E 31 0A 48 6F 73 74 3A 20 74 63    1.1.Host: tc
-0018   70 70 72 6F 78 79 0A 43 6F 6E 74 65    pproxy.Conte
-0024   6E 74 2D 4C 65 6E 67 74 68 3A 20 36    nt-Length: 6
-0030   31 0A 0A 77 6C 6B 66 6A 6C 77 71 6B    1..wlkfjlwqk
-003C   66 6A 68 6C 6B 77 71 6A 65 68 66 6C    fjhlkwqjehfl
-0048   6B 65 77 71 6A 66 68 6C 6B 65 77 71    kewqjfhlkewq
-0054   6A 66 68 6C 6B 65 77 71 6A 66 6C 68    jfhlkewqjflh
-0060   77 71 6B 65 6A 66 68 77 71 6C 6B 65    wqkejfhwqlke
-006C   6A 66 68 0A                            jfh.
-```
-
-You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes. To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
-
-## Deserializing and Serializing Java Objects to XML
-
-**Note: at present this does not work due to changes that made the code not compatible with Jython's `socket` implementation. If Java deserialization is what you are looking for: the last compatible commit is e3290261.**
-
-Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
+# module s7comm, sid, action, protocol, source_address, source_port, destination_address, destination_port, source_tsap, destination_tsap, rosctr, function, subfunction, address, szl-id
+s7comm, 10001, pass, tcp, any, any, 10.10.10.46, any, 0x100, 0x101, 1, 0xf0
+s7comm, 10002, alert, tcp, any, any, 10.10.10.46, any, 0x100, 0x101, 7, 4, 1, ,0x0424
+s7comm, 10003, pass, tcp, any, any, 10.10.10.46, any, 0x100, 0x101, 1, 4
+s7comm, 10004, alert, tcp, any, any, 10.10.10.46, any, 0x100, 0x101, 1, 4,, MD1
+s7comm, 10005, alert, tcp, any, any, 10.10.10.46, any, 0x100, 0x101, 1, 4,, DB1.DBX0
+s7comm, 10006, pass, tcp, any, any, 10.1.1.13, any, 0x300, 0x200
+s7comm, 10007, drop
+# module mqtt, sid, action, protocol, source_address, source_port, destination_address, destination_port, type, qos, username, topic, message
+mqtt, 11001, alert, tcp, any, any, 10.10.10.196, any, MqttConnect, any, any, *, 
+mqtt, 11002, pass, tcp, any, any, 10.10.10.196, any, any, any, any, *,
+mqtt, 11003, drop
+# module logo, sid, action, protocol, source_address, source_port, destination_address, destination_port, request
+logo, 12001, pass, tcp, any, any, 10.10.10.13, any, any
+logo, 12002, alert, tcp, any, any, any, any, StartDown
+logo, 12003, alert, tcp, any, any, any, any, SetClock
+logo, 12004, alert, tcp, any, any, any, any, GetProfile
+logo, 12005, drop
+# module modbus, sid, action, protocol, source_address, source_port, destination_address, destination_port, unit, function, start, length
+modbus, 13001, alert, tcp, any, any, 10.10.10.47, any, 2, any, any, any
+modbus, 13002, pass, tcp, any, any, 10.10.10.47, any, any, any, any, any
+modbus, 13003, drop
+# default module, sid, source_address, source_port, destination_address, destination_port, content
+*, 14001, alert, tcp, any, any, !10.10.10.196, any
+*, 14002, drop, tcp, any, any, any, 8080, !"GET"
+*, 14003, drop
 
 ```
-CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
-```
-If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
-```
-
-                                            +---------+
-                                  +-------> |BurpSuite+-----+
-                                  |         +---------+     |
-                                  |                         V
-+------------------+        +--------+--+                   +-----------+              +-----------+
-| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
-+------------------+        +-----------+                   +-----------+              +-----------+
-```
-The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialized objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialized into XML, fed to the tool and then serialized before sending the response to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om javaxml:mode=deserial,http_post -im http_strip,javaxml:mode=serial
-```
-The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
-Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_ok -om http_strip,javaxml:mode=serial
-```
-This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP response header, then send the data to burp.
-
-Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
-
-If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
-
-Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
+In the above example we leave to pass S7 towards 10.10.10.46 with source TSAP 0x100, destination TSAP 0x101, Job (0x01), Setup communication (0xf0); alert towards 10.10.10.46 with source TSAP 0x100, destination TSAP 0x101, UserData (0x07), funzione 0x04 (CPU), subfunction 0x01 (Read SZL); pass towards 10.10.10.46 with source TSAP 0x100, destination TSAP 0x101, Job (0x01), Read Var (0x04); alert towards 10.10.10.46 with source TSAP 0x100, destination TSAP 0x101, Job (0x01), Read Var (0x04), MD1; alert towards 10.10.10.46 with source TSAP 0x100, destination TSAP 0x101, Job (0x01), Read Var (0x04), DB1.DBX0; pass towards 10.1.1.13 with source TSAP 0x300, destination TSAP 0x200; drop anything all.
+MQTT: alert towards 10.10.10.196 with MqttConnect; pass towards 10.10.10.196, drop anything all.
+Siemens Logo!: pass towards 10.1.1.13; alert if StartDown (upload of a program from the PC to the PLC), SetClock or GetProfile; drop anything all.
+Modbus: pass towards 10.10.10.47; alert in case of 10.10.10.47 with slave 2; drop anything all.
+Default: alert if destination different from 10.10.10.196; drop traffic towards any destination if port 8080 and the payload does not contains "GET"; drop anything all.
 
 ## Logging
 
-You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
+Logging is now managed by python logging module. You can set a logging level (DEBUG/INFO/WARNING/ERROR/CRITICAL) with option **-l/--log-level** or you can define complex logging rules with logging.config (option **-lc/--logging-config**). 
 
-## TODO
+There are two main qualifiers: **alert** (used by alert action of filters) and **filters** (used by drop/reject action). Obviously there is a root **tcpproxy** qualified and you can also define logging paths using the name of the modules as **qualname**.
 
-- [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)
-- [ ] Create and maintain a parallel branch that is compatible with jython but also has most of the new stuff introduced after e3290261
+```
+[loggers]
+keys=root,tcpproxy,filter,alert,s7comm
 
-## Contributions
+[handlers]
+keys=consoleHandler,syslogHandler,fileHandler,fileHandlerAlert,fileHandlerFilter
 
-I want to thank the following people for spending their valuable time and energy on improving this little tool:
+[formatters]
+keys=simpleFormatter,syslogFormatter,fileFormatter,CSVFormatter
 
-- [Adrian Vollmer](https://github.com/AdrianVollmer)
-- [Michael Füllbier](https://github.com/mfuellbier)
-- [Stefan Grönke](https://github.com/gronke)
-- [Mattia](https://github.com/sowdust)
-- [bjorns163](https://github.com/bjorns163)
-- [Pernat1y](https://github.com/Pernat1y)
+[logger_root]
+level=DEBUG
+handlers=consoleHandler,fileHandler
+
+[logger_tcpproxy]
+level=INFO
+propagate=0
+qualname=__main__
+handlers=consoleHandler,fileHandler,syslogHandler
+
+[logger_alert]
+level=DEBUG
+handlers=fileHandlerAlert
+propagate=0
+qualname=alert
+
+[logger_filter]
+level=INFO
+handlers=fileHandlerFilter
+propagate=0
+qualname=filter
+
+[logger_s7comm]
+level=INFO
+handlers=fileHandlerFilter
+propagate=0
+qualname=s7comm
+
+[handler_consoleHandler]
+class=StreamHandler
+level=DEBUG
+formatter=simpleFormatter
+args=(sys.stdout,)
+
+[handler_syslogHandler]
+class=handlers.SysLogHandler
+level=INFO
+formatter=syslogFormatter
+args=('/dev/log', handlers.SysLogHandler.LOG_USER)
+
+[handler_fileHandler]
+class=FileHandler
+level=DEBUG
+formatter=fileFormatter
+args=('/tmp/tcpproxy.log','a')
+
+[handler_fileHandlerAlert]
+class=FileHandler
+level=DEBUG
+formatter=CSVFormatter
+args=('/tmp/alert.log','a')
+
+[handler_fileHandlerFilter]
+class=FileHandler
+level=DEBUG
+formatter=CSVFormatter
+args=('/tmp/filter.log','a')
+
+[formatter_simpleFormatter]
+format=%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s
+datefmt=%Y-%m-%dT%H:%M:%S%z
+
+[formatter_syslogFormatter]
+format=%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s
+datefmt=%Y-%m-%dT%H:%M:%S%z
+
+[formatter_fileFormatter]
+format=%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s
+datefmt=%Y-%m-%dT%H:%M:%S%z
+
+[formatter_CSVFormatter]
+format=%(asctime)s,%(thread)s,%(mod)s,%(sid)s,%(action)s,%(protocol)s,%(src_address)s,%(src_port)s,%(dst_address)s,%(dst_port)s,%(message)s
+datefmt=%Y-%m-%dT%H:%M:%S%z
+```
+
+## FAQ
+
+**Why we changed tcpproxy and wrote OT protocol modules instead of using Snort, Suricata and other ready to use software?** Because IT IDS/IPS lack of a real L7 DPI, you can define only static and hardwired rules while we need to define parametric rules (eg. alert or pass or drop only on a specific modbus register or S7 variable). This is a PoC only but at now there is no solutions or products that can works as OT parametric IDS/IPS. Moreover, the S7, Logo!, MQTT and Modbus TCP modules can audit/alert with a level of details including commands and parameters of the payloads while and IT IDS can only alert the triggering of a rule.
+
+## TODO and limitations
+
+    This is a TCP only proxy. We are working on a UDP experimental version but SO_ORIGINAL_DST is not working at all, so it would be really limited.
+    This is a simple standalone script, not a real daemon. And it's limited to only one port and ip address listening for connections. 
+    SSL mode is working for HTTPS, but it was impossible to made it working for MQTT.
+    SO_ORIGINAL_DST only works for GNU/Linux with netfilter (iptables). Teoretically it would be possibile to run the tcpproxy under other *nix OS and using other firewalls like OpenBSD pf, but without SO_ORIGINAL_DST the proxy is almost useless.
+    Filters at now have a variable number of columns depending by the module (protocol) used.
+
+## Acknowledgements
+
+We want to thanks:
+
+- [René Werner](https://github.com/ickerwx) and all contributors of https://github.com/ickerwx/tcpproxy
+- [Justin Seitz for his book Black Hat Python: Python Programming for Hackers and Pentesters](https://smile.amazon.com/Black-Hat-Python-Programming-Pentesters-ebook/dp/B00QL616DW)
+

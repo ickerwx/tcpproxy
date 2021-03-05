@@ -1,74 +1,119 @@
 #!/usr/bin/env python3
 import os.path as path
-import paho.mqtt.client as mqtt
-from distutils.util import strtobool
+import mqtt_codec.packet
+import mqtt_codec.io
+from mqtt_codec.packet import MqttControlPacketType, MqttPublish, MqttPubrel, MqttSubscribe, MqttUnsubscribe, MqttConnect, MqttConnack, MqttPuback, MqttPubrec, MqttPubcomp, MqttSuback, MqttUnsuback, MqttPingreq, MqttPingresp, MqttDisconnect
+import logging
+import builtins
+import threading
 
-
-class Module:
-    def __init__(self, incoming=False, verbose=False, options=None):
+class Module(threading.local):
+    def __init__(self, incoming=False, loglevel=logging.INFO, options=None, filters=None):
+        global logger
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]
-        self.description = 'Publish the data to an MQTT server'
-        self.incoming = incoming  # incoming means module is on -im chain
-        self.client_id = ''
-        self.username = None
-        self.password = None
-        self.server = None
-        self.port = 1883
+        logger = logging.getLogger(self.name)
+        logger.setLevel(loglevel)
+        self.description = 'MQTT module'
+        self.source = None
+        self.destination = None
+        self.incoming = incoming
+        self.direction = ('OUT','IN')[self.incoming] 
+        self.protocol = 'TCP'
+        self.ports = [1883]
+        self.audit = ''
+        self.detection = False
+        self.username = ''
+        self.type = ''
+        self.qos = 0
         self.topic = ''
-        self.hex = False
+        self.message = ''
+        self.filters = filters
+        logger.setLevel(loglevel)
         if options is not None:
-            if 'clientid' in options.keys():
-                self.client_id = options['clientid']
-            if 'server' in options.keys():
-                self.server = options['server']
-            if 'username' in options.keys():
-                self.username = options['username']
-            if 'password' in options.keys():
-                self.password = options['password']
-            if 'port' in options.keys():
+            if 'ports' in options.keys():
                 try:
-                    self.port = int(options['port'])
-                    if self.port not in range(1, 65536):
-                        raise ValueError
-                except ValueError:
-                    print(f'port: invalid port {options["port"]}, using default {self.port}')
-            if 'topic' in options.keys():
-                self.topic = options['topic']
-            if 'hex' in options.keys():
-                try:
-                    self.hex = bool(strtobool(options['hex']))
-                except ValueError:
-                    print(f'hex: {options["hex"]} is not a bool value, falling back to default value {self.hex}.')
+                    self.ports = [int(port) for port in options['ports'].split(',')]
+                except ValueError as e:
+                    logger.error('Invalid ports specified, using default configuration.')
 
-        if self.server is not None:
-            self.mqtt = mqtt.Client(self.client_id)
-            if self.username is not None or self.password is not None:
-                self.mqtt.username_pw_set(self.username, self.password)
-            self.mqtt.connect(self.server, self.port)
+    def execute(self, data, source, destination):
+        # Protocol detection
+        self.detection = False
+        if self.incoming:
+            addr, port = source
         else:
-            self.mqtt = None
+            addr, port = destination
+        if (port not in self.ports):
+            return data
+        self.detection = True
 
-    def execute(self, data):
-        if self.mqtt is not None:
-            if not self.mqtt.is_connected():
-                self.mqtt.reconnect()
-            if self.hex is True:
-                self.mqtt.publish(self.topic, data.hex())
-            else:
-                self.mqtt.publish(self.topic, data)
+        MqttPacketTypes = {
+             MqttControlPacketType.publish:     MqttPublish,
+             MqttControlPacketType.pubrel:      MqttPubrel,
+             MqttControlPacketType.subscribe:   MqttSubscribe,
+             MqttControlPacketType.unsubscribe: MqttUnsubscribe,
+             MqttControlPacketType.connect:     MqttConnect,
+             MqttControlPacketType.connack:     MqttConnack,
+             MqttControlPacketType.puback:      MqttPuback,
+             MqttControlPacketType.pubrec:      MqttPubrec,
+             MqttControlPacketType.pubcomp:     MqttPubcomp,
+             MqttControlPacketType.suback:      MqttSuback,
+             MqttControlPacketType.unsuback:    MqttUnsuback,
+             MqttControlPacketType.pingreq:     MqttPingreq,
+             MqttControlPacketType.pingresp:    MqttPingresp,
+             MqttControlPacketType.disconnect:  MqttDisconnect
+        }
+
+        offset = 0
+        try:
+            while True:
+                with mqtt_codec.io.BytesReader(data[offset:]) as f:
+                    (bytes_read, decoded) = mqtt_codec.packet.MqttFixedHeader.decode(f)
+                if decoded.packet_type in MqttPacketTypes:
+                    with mqtt_codec.io.BytesReader(data[offset:]) as f:
+                        (bytes_read, decoded) = MqttPacketTypes[decoded.packet_type].decode(f)
+                        self.audit = decoded
+                        logger.info(self.audit)
+                        self.type = MqttPacketTypes[decoded.packet_type].__name__
+                        if hasattr(decoded, 'username'):
+                            self.username = decoded.username
+                        if hasattr(decoded, 'topic'):
+                            self.topic = decoded.topic
+                        if hasattr(decoded, 'qos'):
+                            self.qos = int(decoded.qos)
+                        if hasattr(decoded, 'payload'):
+                            self.message = decoded.payload.decode()
+                        if self.incoming == False and self.filters:
+                            params = [
+                            (self.protocol, PType.IP_PROTO), 
+                            (source[0], PType.IP_ADDR), 
+                            (source[1], PType.NUMERIC), 
+                            (destination[0], PType.IP_ADDR),
+                            (destination[1], PType.NUMERIC),
+                            (self.type, PType.STRING),
+                            (self.qos, PType.NUMERIC), 
+                            (self.topic, PType.STRING),
+                            (self.username, PType.STRING),
+                            (self.message, PType.TEXT)]
+                            self.filters.source = source
+                            self.filters.destination = destination
+                            self.filters.protocol = self.protocol
+                            self.filters.direction = self.direction
+                            self.filters.audit = self.audit
+                            self.filters.filter(self.name, params)
+
+                offset += bytes_read
+        except mqtt_codec.io.UnderflowDecodeError:
+            pass
+        except mqtt_codec.io.DecodeError as e:
+            logger.warning ('offset: %d: %s' % (offset,  str(e)))
+
         return data
 
     def help(self):
-        h = '\tserver: server to connect to, required\n'
-        h += ('\tclientid: what to use as client_id, default is empty\n'
-              '\tusername: username\n'
-              '\tpassword: password\n'
-              '\tport: port to connect to, default 1883\n'
-              '\ttopic: topic to publish to, default is empty\n'
-              '\thex: encode data as hex before sending it. AAAA becomes 41414141.')
-        return h
-
+        h = '\tports: override default TCP port (1883), multiple ports comma separated'
+        return ''
 
 if __name__ == '__main__':
     print('This module is not supposed to be executed alone!')
