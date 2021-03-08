@@ -14,6 +14,7 @@ import json
 import logging
 import logging.config
 import builtins
+import re
 
 FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s')
 logging.basicConfig(format=FORMAT)
@@ -102,7 +103,7 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
     try:
         __import__('proxymodules.' + name)
         if hasattr(sys.modules['proxymodules.' + name], "Module"):
-            mod = sys.modules['proxymodules.' + name].Module(incoming, args.loglevel in ["DEBUG"], options)
+            mod = sys.modules['proxymodules.' + name].Module(incoming, args, options)
             mod.prematch = prematch
             return mod
         else:
@@ -333,7 +334,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"execute") and callable(m.execute):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_info("in" if incoming else "out", "execute %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "execute %s" % m.name, args)
                 try:
                     if args.no_chain_modules:
                         m.execute(data)
@@ -353,7 +354,7 @@ def peek_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"peek") and callable(m.peek):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_info("in" if incoming else "out", "peek %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "peek %s" % m.name, args)
                 if args.no_chain_modules:
                     m.peek(data)
                 else:
@@ -367,7 +368,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"wrap") and callable(m.wrap):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_info("in" if incoming else "out", "wrap %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "wrap %s" % m.name, args)
                 try:
                     if args.no_chain_modules:
                         m.wrap(sock)
@@ -420,6 +421,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
         remote_socket.connect((conn_obj.dst, conn_obj.dstport))
         connection_info(None, "Connected to %s:%d" % remote_socket.getpeername(), args)
     except socket.error as serr:
+        # Do not shutdown socket there as it will be selected on the reading loop
         if serr.errno == errno.ECONNREFUSED:
             connection_failed("server","connection refused", args, conn_obj)
             #return None
@@ -450,6 +452,10 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 else:
                     firstbytes = sock.recv(1024, socket.MSG_PEEK)
             except Exception as err:
+                # Shutdown sockets cleanly
+                for s in [remote_socket, local_socket]:
+                    s.shutdown(socket.SHUT_RDWR)
+                    s.close()
                 connection_failed("client" if sock==local_socket else "server", "Cannot peek socket: "+err.__str__(), args, conn_obj)
                 return None
 
@@ -458,7 +464,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
             else:
                 peeks = peek_data(firstbytes, in_modules, args, sock==remote_socket,  conn_obj)
 
-            connection_info(None, "Peeks: %s" % str(peeks), args, conn_obj)
+            connection_debug(None, "Peeks: %s" % str(peeks), args, conn_obj)
     
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
@@ -467,7 +473,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
             else:
                 wraps = wrap_socket([remote_socket, local_socket, sock], in_modules, args, sock==remote_socket, conn_obj)
 
-            connection_info(None, "Wraps: %s" % str(wraps), args, conn_obj)
+            connection_debug(None, "Wraps: %s" % str(wraps), args, conn_obj)
 
             # Retrieve the last wrapped socket in the chain as our "normal" socket
             if "local_socket" in wraps:
@@ -485,6 +491,10 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 data = receive_from(sock)
                 running = handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, out_modules, conn_obj)
             except Exception as err:
+                # Shutdown sockets cleanly
+                for s in read_sockets:
+                    s.shutdown(socket.SHUT_RDWR)
+                    s.close()
                 connection_failed("client" if sock==local_socket else "server", err.__str__(), args, conn_obj)
                 return None
 
@@ -493,12 +503,10 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
     # Retrieve peer for loggin purposes
     peer = sock.getpeername()
 
-    if args.logfile:
-        log(args.logfile, 'Received %d bytes from %s' % (len(data),peer))
+    logger.debug('Received %d bytes from %s' % (len(data),peer))
 
     if sock == local_socket:
         if len(data):
-            log(args.logfile, b'< < < out\n' + data)
             data = handle_data(data, out_modules,
                                 args,
                                 False,  # incoming data?
@@ -512,7 +520,6 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
 
     elif sock == remote_socket:
         if len(data):
-            log(args.logfile, b'> > > in\n' + data)
             data = handle_data(data, in_modules,
                                 args,
                                 True,  # incoming data?
@@ -528,21 +535,28 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
 
 def connection_failed(direction, msg, args, conn_obj=None):
     if conn_obj:
-        error_msg = 'for connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        error_msg = 'Failed %s connection to %s:%d - %s' % (direction,  conn_obj.dst, conn_obj.dstport, msg)
     else:
         error_msg = '%s' % (msg)
     logger.error(error_msg)
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = 'while connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        warning_msg = 'Connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
         warning_msg = '%s' % (msg)
     logger.warning(warning_msg)
 
+def connection_debug(direction, msg, args, conn_obj=None):
+    if conn_obj:
+        warning_msg = 'Connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+    else:
+        warning_msg = '%s' % (msg)
+    logger.debug(warning_msg)
+
 def connection_info(direction, msg, args, conn_obj=None):
     if conn_obj:
-        info_msg = 'connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        info_msg = 'Connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
         info_msg = '%s' % msg
     logger.info(info_msg)
