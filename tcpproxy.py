@@ -102,7 +102,7 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
     try:
         __import__('proxymodules.' + name)
         if hasattr(sys.modules['proxymodules.' + name], "Module"):
-            mod = sys.modules['proxymodules.' + name].Module(incoming, args, options)
+            mod = sys.modules['proxymodules.' + name].Module(incoming, args.loglevel in ["DEBUG"], options)
             mod.prematch = prematch
             return mod
         else:
