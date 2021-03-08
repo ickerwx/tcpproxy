@@ -36,7 +36,7 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                 kwargs['extra']['conn_str'] = kwargs['extra']['conn'].get_string()
 
                 if 'direction' in kwargs['extra']:
-                    kwargs['extra']['conn_str'].replace(" ",  kwargs['extra']['direction'])
+                    kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  ">" if kwargs['extra']['direction'] in [">", "OUT",  "server"] else "<")
 
         if 'extra' not in kwargs:
             kwargs['extra'] = {}
@@ -334,7 +334,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"execute") and callable(m.execute):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "execute %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "execute %s" % m.name, args,  conn_obj)
                 try:
                     if args.no_chain_modules:
                         m.execute(data)
@@ -354,7 +354,7 @@ def peek_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"peek") and callable(m.peek):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "peek %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "peek %s" % m.name, args, conn_obj)
                 if args.no_chain_modules:
                     m.peek(data)
                 else:
@@ -368,7 +368,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"wrap") and callable(m.wrap):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "wrap %s" % m.name, args)
+                connection_debug("in" if incoming else "out", "wrap %s" % m.name, args,  conn_obj)
                 try:
                     if args.no_chain_modules:
                         m.wrap(sock)
@@ -419,7 +419,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
 
     try:
         remote_socket.connect((conn_obj.dst, conn_obj.dstport))
-        connection_info(None, "Connected to %s:%d" % remote_socket.getpeername(), args)
+        connection_info("server", "Connected to %s:%d" % remote_socket.getpeername(),args, conn_obj)
     except socket.error as serr:
         # Do not shutdown socket there as it will be selected on the reading loop
         if serr.errno == errno.ECONNREFUSED:
@@ -503,7 +503,7 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
     # Retrieve peer for loggin purposes
     peer = sock.getpeername()
 
-    logger.debug('Received %d bytes from %s' % (len(data),peer))
+    connection_debug("client" if sock==local_socket else "server", 'Received %d bytes from %s' % (len(data),peer), args,  conn_obj)
 
     if sock == local_socket:
         if len(data):
