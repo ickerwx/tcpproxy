@@ -5,33 +5,58 @@ import os
 import sys
 import threading
 import socket
-import time
 import select
 import errno
 import queue
 import ssl
-import json
 import logging
 import logging.config
 import builtins
 import re
 
-FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s')
+FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(conn_str)s %(message)s')
 logging.basicConfig(format=FORMAT)
-logger = logging.getLogger(__name__)
-builtins.logger = logger
 
 loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG}
-
-from urllib.parse import urlparse
-try:
-    import redis
-except Exception:
-    pass
 
 # ConnData is an object that contains basic information about the connection.
 # Plugins can also use this object to exchange connection or status information.
 from conndata import ConnData
+
+class ConnectionLogAdapter(logging.LoggerAdapter):
+
+    def __init__(self, logger, extra={}):
+        logging.LoggerAdapter.__init__(self,  logger, extra={})
+        self.conn_none = ConnData(("0.0.0.0", 0), ("0.0.0.0", 0))
+
+    def process(self,  msg,  kwargs):
+        if 'extra' in kwargs:
+            if 'conn' in kwargs['extra'] and kwargs['extra']['conn']:
+                kwargs['extra'].update(kwargs['extra']['conn'].get_dict())
+                kwargs['extra']['conn_str'] = kwargs['extra']['conn'].get_string()
+
+                if 'direction' in kwargs['extra']:
+                    kwargs['extra']['conn_str'].replace(" ",  kwargs['extra']['direction'])
+
+        if 'extra' not in kwargs:
+            kwargs['extra'] = {}
+        if 'conn' not in kwargs['extra'] or not kwargs['extra'] ['conn']:
+            kwargs['extra']['conn'] = self.conn_none
+            kwargs['extra'].update(self.conn_none.get_dict())
+            kwargs['extra'].update({
+                'src': None,
+                'srcport': None,
+                'dst': None,
+                'dstport':None,
+                'conn_str': None,
+            })
+        return msg,  kwargs
+
+logger_raw = logging.getLogger(__name__)
+logger = ConnectionLogAdapter(logger_raw)
+builtins.logger = logger
+
+from urllib.parse import urlparse
 
 # some code snippets, as well as the original idea, from Black Hat Python
 
@@ -114,6 +139,7 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
         return None
         #sys.exit(3)
 
+
 class RulesLoader():
     __instance = None
     uri = None
@@ -142,21 +168,9 @@ class RulesLoader():
             sys.exit(1)
 
         elif self.uri.scheme in ["redis", "rediss", "unix"]:
-            if "redis" not in sys.modules:
-                connection_failed(None, "Dependency redis not present. Impossible to load specified ruleset", args)
-                sys.exit(1)
-
-            # Create a redis connection pool and client
-            self.redis_pool = redis.ConnectionPool.from_url(self.uri.geturl())
-            self.redis = redis.Redis(connection_pool=self.redis_pool)
-            self.handler = "redis"
-
-            # Store module documentation on redis
+            import api_redis
             infos = get_modules_list()
-            self.redis.set('modules', " ".join(infos.keys()))
-            self.redis.set('default_modules', "peek_sni,peek_httphost,peek_ssl")
-            for key, value in infos.items():
-                self.redis.set("module:%s:help"%key, value)
+            self.api = api_redis.API(args,  infos,  self.uri)
 
         elif self.uri.scheme in ["file"]:
             connection_failed(None, "Loading ruleset from file is not implemented", args)
@@ -167,21 +181,7 @@ class RulesLoader():
             sys.exit(1)
 
     def read(self, args, conn):
-        if self.handler == "redis":
-            try:
-                rules = self.redis.get('rules')
-            except Exception as ex:
-                connection_failed(None, "Failed to connect to redis to retrieve rules: %s" % str(ex), args, conn)
-                return {}
-
-            if not rules:
-                return {}
-
-            try:
-                rules = json.loads(rules)
-                return rules
-            except Exception as ex:
-                connection_failed(None, "Failed to decode rules json: %s" % str(ex), args, conn)
+        return self.api.rules()
 
 def generate_module_list(namelist, args, incoming=False):
     # This method receives a list of modules name, imports the modules
@@ -535,31 +535,31 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
 
 def connection_failed(direction, msg, args, conn_obj=None):
     if conn_obj:
-        error_msg = 'Failed %s connection to %s:%d - %s' % (direction,  conn_obj.dst, conn_obj.dstport, msg)
+        error_msg = 'Failed connection with %s : %s' % (direction,  msg)
     else:
         error_msg = '%s' % (msg)
-    logger.error(error_msg)
+    logger.error(error_msg, extra={'conn':conn_obj})
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = 'Connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        warning_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         warning_msg = '%s' % (msg)
-    logger.warning(warning_msg)
+    logger.warning(warning_msg, extra={'conn':conn_obj})
 
 def connection_debug(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = 'Connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        debug_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
-        warning_msg = '%s' % (msg)
-    logger.debug(warning_msg)
+        debug_msg = '%s' % (msg)
+    logger.debug(debug_msg, extra={'conn':conn_obj})
 
 def connection_info(direction, msg, args, conn_obj=None):
     if conn_obj:
-        info_msg = 'Connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        info_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         info_msg = '%s' % msg
-    logger.info(info_msg)
+    logger.info(info_msg, extra={'conn':conn_obj})
 
 def main():
     args = parse_args()

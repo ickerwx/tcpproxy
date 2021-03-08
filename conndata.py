@@ -101,6 +101,9 @@ class ConnData:
     def get_json(self, data=None, **kwargs):
         return json.dumps(self.get_dict(data, **kwargs))
 
+    def get_string(self):
+        return "%s:%s %s:%s" % (self.src,  self.srcport,  self.dst,  self.dstport)
+
     def get_channel(self):
         return ":".join([self.src,str(self.srcport),self.dst,str(self.dstport),self.hostname if self.hostname else "undefined", ','.join(self.tags)])
 

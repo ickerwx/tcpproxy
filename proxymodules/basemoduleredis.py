@@ -10,8 +10,8 @@ except Exception:
 class BaseModuleRedis(BaseModule):
     channel_name = None
 
-    def __init__(self, incoming=False, verbose=False, options=None):
-        BaseModule.__init__(self, incoming, verbose, options)
+    def __init__(self, incoming=False, args=None, options=None):
+        BaseModule.__init__(self, incoming, args, options)
 
         self.name = path.splitext(path.basename(__file__))[0]
 
@@ -34,9 +34,6 @@ class BaseModuleRedis(BaseModule):
             channel = "debug:"+level+":"+self.channel_name
             if self.redis_db:
                 self.redis_db.publish(channel, self.conn.get_json(self.name+": "+msg, level=level))
-
-    def log_trace(self, msg):
-        BaseModule.log(self, "TRACE", msg)
 
 if __name__ == '__main__':
     print ('This module is not supposed to be executed alone!')

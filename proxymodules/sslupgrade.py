@@ -25,8 +25,8 @@ except Exception:
 
 class Module(BaseModuleRedis):
 
-    def __init__(self, incoming=False, verbose=False, options=None):
-        BaseModuleRedis.__init__(self, incoming, verbose, options)
+    def __init__(self, incoming=False, args=None, options=None):
+        BaseModuleRedis.__init__(self, incoming, args, options)
         self.description = 'Upgrade connection to SSL automatically if requested by the client (ClientHello)'
         self.name = path.splitext(path.basename(__file__))[0]
 

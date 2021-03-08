@@ -10,8 +10,8 @@ except Exception:
 
 
 class Module(BaseModule):
-    def __init__(self, incoming=False, verbose=False, options=None):
-        BaseModule.__init__(self, incoming, verbose, options)
+    def __init__(self, incoming=False, args=None, options=None):
+        BaseModule.__init__(self, incoming, args, options)
 
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]

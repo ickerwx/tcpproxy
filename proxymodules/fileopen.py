@@ -6,8 +6,8 @@ import socket
 
 class Module(BaseModuleRedis):
 
-    def __init__(self, incoming=False, verbose=False, options=None):
-        BaseModuleRedis.__init__(self, incoming, verbose, options)
+    def __init__(self, incoming=False, args=None, options=None):
+        BaseModuleRedis.__init__(self, incoming, args, options)
 
         self.tempfile = TemporaryFile()
 

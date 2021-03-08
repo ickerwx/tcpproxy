@@ -1,15 +1,24 @@
 #!/usr/bin/env python2
 import os.path as path
+import logging
 
+# subclassing threading.local based on https://github.com/ickerwx/tcpproxy/pull/26 ?
 class BaseModule:
-    def __init__(self, incoming=False, verbose=False, options=None):
+    def __init__(self, incoming=False, args=None, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]
+
         self.description = "Base Module"
         self.incoming = incoming  # incoming means module is on -im chain
+        self.direction = ('OUT','IN')[self.incoming]
+        self.protocol = 'TCP'
         self.conn = None
         self.prematch = None
-        self.verbose = verbose
+
+        self.verbose = False
+        if args != None:
+            self.verbose = args.log_level in ["DEBUG"]
+
         self.dependencies = []
 
     def getInfos(self):
@@ -40,24 +49,20 @@ class BaseModule:
     def peek(self, data):
         return {}
 
-    def log(self, level, msg):
-        if self.verbose:
-            print( ("> > > > in: " if self.incoming else "< < < < out: ") + self.name + " " + level + ": " + msg)
-
     def log_error(self, msg):
-        self.log("ERROR", msg)
+        logger.error(msg, extra={'conn':self.conn, "direction":self.direction})
 
     def log_warning(self, msg):
-        self.log("WARNING", msg)
+        logger.warning(msg, extra={'conn':self.conn, "direction":self.direction})
 
     def log_info(self, msg):
-        self.log("INFO", msg)
+        logger.info(msg, extra={'conn':self.conn, "direction":self.direction})
 
     def log_debug(self, msg):
-        self.log("DEBUG", msg)
+        logger.debug(msg, extra={'conn':self.conn, "direction":self.direction})
 
     def log_trace(self, msg):
-        self.log("TRACE", msg)
+        logger.log(2,  msg, extra={'conn':self.conn, "direction":self.direction})
 
     def is_inhibited(self):
         if len(self.dependencies) > 0:

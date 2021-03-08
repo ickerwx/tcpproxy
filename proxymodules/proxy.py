@@ -8,8 +8,8 @@ except Exception:
     print("WARNING: cannot load pysocks. proxy module will be inefective")
 
 class Module(BaseModule):
-    def __init__(self, incoming=False, verbose=False, options=None):
-        BaseModule.__init__(self, incoming, verbose, options)
+    def __init__(self, incoming=False, args=None, options=None):
+        BaseModule.__init__(self, incoming, args, options)
         self.name = path.splitext(path.basename(__file__))[0]
         self.description = 'Redirect trafic using a HTTP or SOCKS proxy'
  
