@@ -11,6 +11,17 @@ import errno
 import queue
 import ssl
 import json
+import logging
+import logging.config
+import builtins
+
+FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(message)s')
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger(__name__)
+builtins.logger = logger
+
+loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG}
+
 from urllib.parse import urlparse
 try:
     import redis
@@ -21,7 +32,6 @@ except Exception:
 # Plugins can also use this object to exchange connection or status information.
 from conndata import ConnData
 
-# TODO: implement verbose output
 # some code snippets, as well as the original idea, from Black Hat Python
 
 def is_valid_ip4(ip):
@@ -62,17 +72,16 @@ def parse_args():
                         help='comma-separated list of modules to modify data' +
                              ' received from the remote target.')
 
-    parser.add_argument('-v', '--verbose', dest='verbose', default=False,
-                        action='store_true',
-                        help='More verbose output of status information')
-
     parser.add_argument('-n', '--no-chain', dest='no_chain_modules',
                         action='store_true', default=False,
                         help='Don\'t send output from one module to the ' +
                              'next one')
 
-    parser.add_argument('-l', '--log', dest='logfile', default=None,
-                        help='Log all data to a file before modules are run.')
+    parser.add_argument('-l', '--log-level', dest='log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Logging level (verbosity)')
+
+    parser.add_argument('-lc', '--log-config', dest='log_config', default=None,
+                        help='Logging configuration file (mutually exclusive with -l --loglevel)')
 
     parser.add_argument('--list', dest='list', action='store_true',
                         help='list available modules')
@@ -93,7 +102,7 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
     try:
         __import__('proxymodules.' + name)
         if hasattr(sys.modules['proxymodules.' + name], "Module"):
-            mod = sys.modules['proxymodules.' + name].Module(incoming, args.verbose, options)
+            mod = sys.modules['proxymodules.' + name].Module(incoming, args, options)
             mod.prematch = prematch
             return mod
         else:
@@ -517,51 +526,39 @@ def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, 
 
     return True
 
-# TODO: switch log, verbose, connection_warning, connection_failed to usage of python logging (with log levels and optional file factory)
 def connection_failed(direction, msg, args, conn_obj=None):
     if conn_obj:
-        error_msg = 'FAILED: for connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        error_msg = 'for connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
-        error_msg = 'FAILED: %s' % (msg)
-    print(error_msg)
-    log(args.logfile, error_msg)
+        error_msg = '%s' % (msg)
+    logger.error(error_msg)
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
-        warning_msg = 'WARNING: while connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        warning_msg = 'while connecting to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
-        warning_msg = 'WARNING: %s' % (msg)
-    print(warning_msg)
-    log(args.logfile, warning_msg)
+        warning_msg = '%s' % (msg)
+    logger.warning(warning_msg)
 
 def connection_info(direction, msg, args, conn_obj=None):
     if conn_obj:
-        info_msg = 'INFO: connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
+        info_msg = 'connection to %s:%d - %s' % (conn_obj.dst, conn_obj.dstport, msg)
     else:
-        info_msg = 'INFO: %s' % msg
-    if args.verbose:
-        print(info_msg)
-        log(args.logfile, info_msg)
-
-def log(handle, message, message_only=False):
-    # if message_only is True, only the message will be logged
-    # otherwise the message will be prefixed with a timestamp and a line is
-    # written after the message to make the log file easier to read
-    if not isinstance(message, bytes):
-        message = bytes(message, 'ascii')
-    if handle is None:
-        return
-    if not message_only:
-        logentry = bytes("%s %s\n" % (time.strftime('%Y%m%d-%H%M%S'), str(time.time())), 'ascii')
-    else:
-        logentry = b''
-    logentry += message
-    if not message_only:
-        logentry += b'\n' + b'-' * 20 + b'\n'
-    handle.write(logentry)
+        info_msg = '%s' % msg
+    logger.info(info_msg)
 
 def main():
     args = parse_args()
+
+    if args.log_config and os.path.isfile(args.log_config):
+        try:
+            logging.config.fileConfig(args.log_config)
+        except KeyError as e:
+            logger.critical('Error in logging configuration %s: %s' % (args.log_config, str(e)))
+            sys.exit(9)
+    else:
+        logger.setLevel(loglevels[args.log_level])
+
     if args.list is False and args.help_modules is None:
         if args.target_port and not args.target_ip:
             print('Both target IP and target Ports are required: missing -ti')
@@ -569,14 +566,6 @@ def main():
         if args.target_ip and not args.target_port:
             print('Both target IP and target Ports are required: missing -tp')
             sys.exit(7)
-
-    if args.logfile is not None:
-        try:
-            args.logfile = open(args.logfile, 'ab', 0)  # unbuffered
-        except Exception as ex:
-            print('Error opening logfile')
-            print(ex)
-            sys.exit(4)
 
     if args.list:
         list_modules()
@@ -644,7 +633,7 @@ def main():
         sys.exit(5)
 
     proxy_socket.listen(10)
-    log(args.logfile, str(args))
+    logger.info("Starting tcpproxy.py (%s)" % str(args))
 
     threads=[]
     running = queue.Queue()
