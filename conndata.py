@@ -26,6 +26,7 @@ class ConnData:
     def setrealdest(self, csock):
         # SO_ORIGINAL_DST option is set when iptable REDIRECT target are used
         # and allows retrieving the original socket destination IP and port (if supported)
+        SOCKADDR_MIN = 16
         try:
             socket.SO_ORIGINAL_DST
         except AttributeError:
@@ -34,12 +35,13 @@ class ConnData:
 
         # Use the Linux specific socket option to query NetFilter
         try:
-            odestdata = csock.getsockopt(socket.SOL_IP, socket.SO_ORIGINAL_DST, 16)
+            odestdata = csock.getsockopt(socket.SOL_IP, socket.SO_ORIGINAL_DST, SOCKADDR_MIN)
         except FileNotFoundError:
             raise Exception("Cannot initiate connection in transparent proxy mode (get socket destination from Netfilter failed).")
 
         # Unpack the first 6 bytes, which hold the destination data needed
-        _, port, a1, a2, a3, a4 = struct.unpack("!HHBBBBxxxxxxxx", odestdata)
+        proto, port, a1, a2, a3, a4 = struct.unpack("!HHBBBBxxxxxxxx", odestdata)
+        assert(socket.htons(proto) == socket.AF_INET)
         address = "%d.%d.%d.%d" % (a1, a2, a3, a4)
 
         self.dst = address
