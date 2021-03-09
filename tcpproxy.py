@@ -172,9 +172,9 @@ class RulesLoader():
             infos = get_modules_list()
             self.api = api_redis.API(args,  infos,  self.uri)
 
-        elif self.uri.scheme in ["file"]:
-            connection_failed(None, "Loading ruleset from file is not implemented", args)
-            sys.exit(1)
+        elif self.uri.scheme in ["file", "csv", "json"]:
+            import api_file
+            self.api = api_file.API(args,  infos,  self.uri)
 
         else:
             connection_failed(None,"Invalid URI sheme %s for loading ruleset" % url.scheme, args)
