@@ -424,10 +424,10 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
         # Do not shutdown socket there as it will be selected on the reading loop
         if serr.errno == errno.ECONNREFUSED:
             connection_failed("server","connection refused", args, conn_obj)
-            #return None
+        elif serr.errno == errno.ETIMEDOUT:
+            connection_failed("server","connection timed out", args, conn_obj)
         else:
             connection_failed("server","connection error "+serr.__str__(),args,conn_obj)
-            #raise serr
 
     update_module_hosts(out_modules, conn_obj)
     update_module_hosts(in_modules, conn_obj)

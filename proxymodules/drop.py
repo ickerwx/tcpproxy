@@ -45,7 +45,7 @@ class Drop(BaseModule):
 
             self.dropped = True
             self.conn.add_tag(tag)
-            self.log_warning("Connection to remote server %s" % text)
+            self.log_warning("Client connection %s" % text)
 
         return {}
 
