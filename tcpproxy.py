@@ -35,8 +35,12 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                 kwargs['extra'].update(kwargs['extra']['conn'].get_dict())
                 kwargs['extra']['conn_str'] = kwargs['extra']['conn'].get_string()
 
-                if 'direction' in kwargs['extra']:
-                    kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  ">" if kwargs['extra']['direction'] in [">", "OUT",  "server"] else "<")
+                if 'direction' in kwargs['extra'] and kwargs['extra']['direction']!=None:
+                    #print(kwargs['extra']['direction'])
+                    if kwargs['extra']['direction'].lower() in [">",  "client",  "in",  "incoming"]:
+                        kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  ">")
+                    elif kwargs['extra']['direction'].lower() in ["<",  "server",  "out",  "outgoing"]:
+                        kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  "<")
 
         if 'extra' not in kwargs:
             kwargs['extra'] = {}
@@ -334,7 +338,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"execute") and callable(m.execute):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "execute %s" % m.name, args,  conn_obj)
+                connection_debug("client" if incoming else "server", "execute %s" % m.name, args,  conn_obj)
                 try:
                     if args.no_chain_modules:
                         m.execute(data)
@@ -354,7 +358,7 @@ def peek_data(data, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"peek") and callable(m.peek):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "peek %s" % m.name, args, conn_obj)
+                connection_debug("client" if incoming else "server", "peek %s" % m.name, args, conn_obj)
                 if args.no_chain_modules:
                     m.peek(data)
                 else:
@@ -368,7 +372,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
     for m in modules:
         if hasattr(m,"wrap") and callable(m.wrap):
             if not hasattr(m,"is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
-                connection_debug("in" if incoming else "out", "wrap %s" % m.name, args,  conn_obj)
+                connection_debug("client" if incoming else "server", "wrap %s" % m.name, args,  conn_obj)
                 try:
                     if args.no_chain_modules:
                         m.wrap(sock)
@@ -675,7 +679,6 @@ def main():
             else:
                 connection_info(None, "Thread %s already dead." % str(thread.ident), args)
         sys.exit(0)
-
 
 if __name__ == '__main__':
     main()
