@@ -15,9 +15,6 @@ class RedisLogHandler(logging.Handler):
         self.conn_none =  ConnData(("0.0.0.0", 0), ("0.0.0.0", 0))
 
     def emit(self,  record):
-        #logging.StreamHandler.emit(self,  record)
-        data = record.__dict__
-
         # Will publish to redis debug channel
         channel = "debug:"+record.levelname+":"+record.conn.get_channel()
         self.redis.publish(channel, record.conn.get_json(record.threadName+": "+record.msg, level=record.levelname))
