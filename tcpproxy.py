@@ -14,6 +14,9 @@ import logging.config
 import builtins
 import re
 
+from protocol_tcp import ProtocolTCP
+from protocol_socks import ProtocolSOCKS
+
 FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(conn_str)s %(message)s')
 logging.basicConfig(format=FORMAT)
 
@@ -124,6 +127,9 @@ def parse_args():
 
     parser.add_argument('-t', '--timeout', dest='timeout', default=5,
                         help='Specify server side timeout to get fast failure feedback (seconds)')
+
+    parser.add_argument('--protocol', dest='protocol',  default="tcp", 
+                        help='Specify protocol for listening thread (tcp/udp/socks)')
 
     return parser.parse_args()
 
@@ -320,17 +326,6 @@ def update_module_hosts(modules, conn_obj):
                 if hasattr(m, 'destination'):
                     m.destination = conn_obj.dst
 
-def receive_from(s):
-    # receive data from a socket until no more data is there
-    b = b""
-    while True:
-        data = s.recv(4096)
-        b += data
-        if not data or len(data) < 4096:
-            break
-    return b
-
-
 def handle_data(data, modules, args, incoming, conn_obj):
     # execute each active module on the data. If no_chain_modules is set, feed the
     # output of one plugin to the following plugin. Not every plugin will
@@ -391,26 +386,31 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
 
     return wraps
 
-
 def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # This method is executed in a thread. It will relay data between the local
     # host and the remote host, while letting modules work on the data before
     # passing it on.
-    remote_socket = socket.socket()
+    
+    if args.protocol.lower() == "tcp":
+        proto = ProtocolTCP(local_socket,  args)
+    elif args.protocol.lower() == "socks":
+        proto = ProtocolSOCKS(local_socket,  args)
+    else:
+        raise Exception("Unsupported protocol %s" % args.protocol.lower())
 
-    # Set timeout to 5 seconds by default to get faster failure feedback
-    remote_socket.settimeout(args.timeout)
+    if not proto.connect_source():
+        connection_failed("client",  "Initiating %s connection" % proto.name,  args)
 
     # Create conn obj based on known information about the connection.
     try:
         conn_obj = ConnData(
-            source=local_socket.getpeername(),
-            destination=(args.target_ip,args.target_port),
-            dest_socket=local_socket
+            source=local_socket.getpeername()
         )
     except Exception as err:
         connection_failed(None,  err.__str__(),  args)
         return None
+
+    proto.set_connection(conn_obj)
 
     # TODO improve error check by verifying all Local IP addresses (if listen_ip is not used)
     if (conn_obj.dst == args.listen_ip and conn_obj.dstport == args.listen_port):
@@ -421,17 +421,8 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     if args.rules:
         out_modules, in_modules = load_modules_from_rules(args, RulesLoader.getInstance().read(args, conn_obj), conn_obj)
 
-    try:
-        remote_socket.connect((conn_obj.dst, conn_obj.dstport))
-        connection_info("server", "Connected to %s:%d" % remote_socket.getpeername(),args, conn_obj)
-    except socket.error as serr:
-        # Do not shutdown socket there as it will be selected on the reading loop
-        if serr.errno == errno.ECONNREFUSED:
-            connection_failed("server","connection refused", args, conn_obj)
-        elif serr.errno == errno.ETIMEDOUT:
-            connection_failed("server","connection timed out", args, conn_obj)
-        else:
-            connection_failed("server","connection error "+serr.__str__(),args,conn_obj)
+    if not proto.connect_destination():
+        connection_failed("server",  "Initiating %s connection" % proto.name,  args,  conn_obj)
 
     update_module_hosts(out_modules, conn_obj)
     update_module_hosts(in_modules, conn_obj)
@@ -440,7 +431,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
     # remote socket
     running = True
     while running and trunning.qsize() <= 0:
-        read_sockets, _, _ = select.select([remote_socket, local_socket], [], [])
+        read_sockets, _, _ = select.select(proto.get_sockets(), [], [])
 
         # Before execution data modules, run peek and wrap modules
         for sock in read_sockets:
@@ -455,84 +446,94 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 # Last try by using the MSG_PEEK API
                 else:
                     firstbytes = sock.recv(1024, socket.MSG_PEEK)
+            except ConnectionResetError as err:
+                # Shutdown sockets cleanly
+                proto.shutdown_local()
+                proto.shutdown_remote()
+                connection_failed("local" if proto.is_local(sock) else "remote", "Connection reset while peeking socket: "+err.__str__(), args, conn_obj)
+                return None
             except Exception as err:
                 # Shutdown sockets cleanly
-                for s in [remote_socket, local_socket]:
-                    s.shutdown(socket.SHUT_RDWR)
-                    s.close()
-                connection_failed("client" if sock==local_socket else "server", "Cannot peek socket: "+err.__str__(), args, conn_obj)
+                proto.shutdown_local()
+                proto.shutdown_remote()
+                connection_failed("local" if proto.is_local(sock) else "remote", "Cannot peek socket: "+err.__str__(), args, conn_obj)
                 return None
 
-            if sock == local_socket:
-                peeks = peek_data(firstbytes, out_modules, args, sock==remote_socket,  conn_obj)
-            else:
-                peeks = peek_data(firstbytes, in_modules, args, sock==remote_socket,  conn_obj)
+            if proto.is_local(sock):
+                peeks = peek_data(firstbytes, out_modules, args, True,  conn_obj)
+            elif proto.is_remote(sock):
+                peeks = peek_data(firstbytes, in_modules, args, False,  conn_obj)
 
-            connection_debug(None, "Peeks: %s" % str(peeks), args, conn_obj)
+            connection_debug("client" if proto.is_local(sock) else "server", "Peeks: %s" % str(peeks), args, conn_obj)
     
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
-            if sock == local_socket:
-                wraps = wrap_socket([remote_socket, local_socket, sock], out_modules, args, sock==remote_socket, conn_obj)
-            else:
-                wraps = wrap_socket([remote_socket, local_socket, sock], in_modules, args, sock==remote_socket, conn_obj)
+            sockets = proto.get_sockets()
+            sockets.append(sock)
+            if proto.is_local(sock):
+                wraps = wrap_socket(sockets, out_modules, args, True, conn_obj)
+            elif proto.is_remote(sock):
+                wraps = wrap_socket(sockets, in_modules, args, False, conn_obj)
 
-            connection_debug(None, "Wraps: %s" % str(wraps), args, conn_obj)
+            connection_debug("client" if proto.is_local(sock) else "server", "Wraps: %s" % str(wraps), args, conn_obj)
 
             # Retrieve the last wrapped socket in the chain as our "normal" socket
+            if "error" in wraps:
+                proto.shutdown_local()
+                proto.shutdown_remote()
+                return None
             if "local_socket" in wraps:
-                local_socket = wraps["local_socket"]
+                proto.wrap_local(wraps["local_socket"])
             if "remote_socket" in wraps:
-                remote_socket = wraps["remote_socket"]
+                proto.wrap_remote( wraps["remote_socket"])
 
             # If there have been wrapping, read the data from the wrapped sockets
             if "local_socket" in wraps or "remote_socket" in wraps:
-                read_sockets, _, _ = select.select([local_socket, remote_socket], [], [])
+                read_sockets, _, _ = select.select(proto.get_sockets(), [], [])
 
         # Finally retrieve data from socket
         for sock in read_sockets:
             try:
-                data = receive_from(sock)
-                running = handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, out_modules, conn_obj)
+                data = proto.read(sock)
+                running = handle_data_read(sock, data, args, proto, in_modules, out_modules, conn_obj)
             except Exception as err:
                 # Shutdown sockets cleanly
-                for s in read_sockets:
-                    s.shutdown(socket.SHUT_RDWR)
-                    s.close()
-                connection_failed("client" if sock==local_socket else "server", err.__str__(), args, conn_obj)
+                proto.shutdown_local()
+                proto.shutdown_remote()
+                connection_failed("client" if proto.is_local(sock) else "server", err.__str__(), args, conn_obj)
                 return None
 
-def handle_data_read(sock, data, args, local_socket, remote_socket, in_modules, out_modules, conn_obj):
+def handle_data_read(sock, data, args, proto, in_modules, out_modules, conn_obj):
 
     # Retrieve peer for loggin purposes
     peer = sock.getpeername()
 
-    connection_debug("client" if sock==local_socket else "server", 'Received %d bytes from %s' % (len(data),peer), args,  conn_obj)
+    connection_debug("client" if proto.is_local(sock) else "server", 'Received %d bytes from %s' % (len(data),peer), args,  conn_obj)
 
-    if sock == local_socket:
+    if proto.is_local(sock):
         if len(data):
             data = handle_data(data, out_modules,
                                 args,
-                                False,  # incoming data?
+                                True, # is incoming initiated?
                                 conn_obj
             )
-            remote_socket.send(data.encode() if isinstance(data, str) else data)
+            proto.send_remote(data.encode() if isinstance(data, str) else data)
         else:
-            connection_info(None, "Connection from local client %s:%d closed" % peer, args)
-            remote_socket.close()
+            connection_info("client", "Connection from %s:%d closed" % peer, args)
+            proto.shutdown_remote()
             return False
 
-    elif sock == remote_socket:
+    elif proto.is_remote(sock):
         if len(data):
             data = handle_data(data, in_modules,
                                 args,
-                                True,  # incoming data?
+                                False, # is incoming initiated?
                                 conn_obj
             )
-            local_socket.send(data)
+            proto.send_local(data)
         else:
-            connection_info(None, "Connection to remote server %s:%d closed" % peer, args)
-            local_socket.close()
+            connection_info("server", "Connection to %s:%d closed" % peer, args)
+            proto.shutdown_local()
             return False
 
     return True
@@ -542,28 +543,29 @@ def connection_failed(direction, msg, args, conn_obj=None):
         error_msg = 'Failed connection with %s : %s' % (direction,  msg)
     else:
         error_msg = '%s' % (msg)
-    logger.error(error_msg, extra={'conn':conn_obj})
+    logger.error(error_msg, extra={'conn':conn_obj, 'direction':direction})
 
 def connection_warning(direction, msg, args, conn_obj=None):
     if conn_obj:
         warning_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         warning_msg = '%s' % (msg)
-    logger.warning(warning_msg, extra={'conn':conn_obj})
+    logger.warning(warning_msg, extra={'conn':conn_obj, 'direction':direction})
 
 def connection_debug(direction, msg, args, conn_obj=None):
     if conn_obj:
         debug_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         debug_msg = '%s' % (msg)
-    logger.debug(debug_msg, extra={'conn':conn_obj})
+    logger.debug(debug_msg, extra={'conn':conn_obj, 'direction':direction})
 
 def connection_info(direction, msg, args, conn_obj=None):
     if conn_obj:
         info_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         info_msg = '%s' % msg
-    logger.info(info_msg, extra={'conn':conn_obj})
+    logger.info(info_msg, extra={'conn':conn_obj, 'direction':direction})
+
 
 def main():
     args = parse_args()
