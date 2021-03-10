@@ -403,12 +403,14 @@ class Module(BaseModuleRedis):
             self.orig_x509 = bulkcert
             return sock, None
 
-        # Now retrieve the certificate
-        # Take the binary for or it wont be loaded if the certificate is not trusted
-        cert = ssl_socket.getpeercert(binary_form = True)
-
-        self.set_orig_x509(cert)
-        #print "Retrieved server certificate",self.orig_x509
+        # If mode = file we don't care about the server certificate
+        if self.mode != "file":
+            # Now retrieve the certificate
+            # Take the binary for or it wont be loaded if the certificate is not trusted
+            cert = ssl_socket.getpeercert(binary_form = True)
+            
+            self.set_orig_x509(cert)
+            #print "Retrieved server certificate",self.orig_x509
 
         self.ssl_server_socket = ssl_socket
 
