@@ -6,7 +6,6 @@ import sys
 import threading
 import socket
 import select
-import errno
 import queue
 import ssl
 import logging
@@ -411,10 +410,11 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
         return None
 
     proto.set_connection(conn_obj)
+    # If server connection fails we may still want to get client side data
 
-    # TODO improve error check by verifying all Local IP addresses (if listen_ip is not used)
-    if (conn_obj.dst == args.listen_ip and conn_obj.dstport == args.listen_port):
-        connection_failed("server",  "Attempt to connect to TCPProxy itself cancelled",  args,  conn_obj)
+    if not proto.is_valid():
+        # If server connection fails we may still want to get client side data
+        connection_failed("remote",  "Attempt to connect to TCPProxy itself cancelled",  args,  conn_obj)
         return None
 
     # Reload ruleset for each connection (in case the ruleset is changed)

@@ -1,5 +1,6 @@
 import struct
 import socket
+import errno
 
 class ProtocolTCP():
     
@@ -139,7 +140,8 @@ class ProtocolTCP():
         assert(socket.htons(proto) == socket.AF_INET)
         address = "%d.%d.%d.%d" % (a1, a2, a3, a4)
 
-        if (address, port) == self.in_socket.getsockname():
-            raise Exception("Cannot initiate connection in transparent proxy mode (connection has been directly initiated to TCPProxy listening port).")
-
         return (address, port)
+
+    def is_valid(self):
+        # Check that it is not a direct connection to the tcpproxy port
+        return self.conn.dst != None and self.conn.dst != "0.0.0.0" and (self.conn.dst , self.conn.dstport) != self.in_socket.getsockname()

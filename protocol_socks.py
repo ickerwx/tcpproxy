@@ -165,10 +165,19 @@ class ProtocolSOCKS(ProtocolTCP):
         if self.dst_hostname != None:
             self.conn.set_hostname(self.dst_hostname)
             if self.dst_addr == None:
-                self.dst_addr = socket.gethostbyname(self.dst_hostname)
+                try:
+                    self.dst_addr = socket.gethostbyname(self.dst_hostname)
+                except socket.gaierror as ex:
+                    self.conn.set_destination(("0.0.0.0",  self.dst_port))
+                    self.connection_failed("remote", "Cannot resolve %s" % self.dst_hostname.decode("utf8"))
+                    return False
         
         if self.dst_addr == None:
             return False
             
         self.conn.set_destination((self.dst_addr,  self.dst_port))
+        return True
+        
+    def is_valid(self):
+        # We actually expect a direct connection to the tcpproxy port but destination could be invalid
         return True
