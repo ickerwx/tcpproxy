@@ -18,8 +18,13 @@ from protocol_socks import ProtocolSOCKS
 
 FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(calling_module)-15s %(conn_str)s %(message)s')
 logging.basicConfig(format=FORMAT)
-
-loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG}
+LOG_LEVEL_TRACE = 2
+logging.addLevelName(LOG_LEVEL_TRACE,  "TRACE")
+def trace(self, message, *args, **kwargs):
+    if self.isEnabledFor(LOG_LEVEL_TRACE):
+        print("TRACE", message)
+logging.Logger.trace = trace
+loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG,  'TRACE': LOG_LEVEL_TRACE}
 
 # ConnData is an object that contains basic information about the connection.
 # Plugins can also use this object to exchange connection or status information.
@@ -27,6 +32,8 @@ from conndata import ConnData
 
 import inspect
 class ConnectionLogAdapter(logging.LoggerAdapter):
+
+    trace = trace
 
     def __init__(self, logger, extra={}):
         logging.LoggerAdapter.__init__(self,  logger, extra={})
@@ -117,7 +124,7 @@ def parse_args():
                         help='Don\'t send output from one module to the ' +
                              'next one')
 
-    parser.add_argument('-l', '--log-level', dest='log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+    parser.add_argument('-l', '--log-level', dest='log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'TRACE'],
                         help='Logging level (verbosity)')
 
     parser.add_argument('-lc', '--log-config', dest='log_config', default=None,
