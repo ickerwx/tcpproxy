@@ -17,7 +17,7 @@ class RedisLogHandler(logging.Handler):
     def emit(self,  record):
         # Will publish to redis debug channel
         channel = "debug:"+record.levelname+":"+record.conn.get_channel()
-        self.redis.publish(channel, record.conn.get_json(record.threadName+": "+record.msg, level=record.levelname))
+        self.redis.publish(channel, record.conn.get_json(record.threadName+": "+record.msg, level=record.levelname, module=record.calling_module))
 
 class API():
 

@@ -248,11 +248,11 @@ class TCPProxyPaneFile(QTableWidget):
         
 class TCPProxyPaneData(QTableWidget):
     
-    fields = [ "id", "level", "src", "srcport", "c2s", "dst", "dstport","hostname","tags","data" ]
+    fields = [ "id", "level", "module", "src", "srcport", "c2s", "dst", "dstport","hostname","tags","data" ]
     
     def __init__(self):
         super().__init__()
-        self.initUI(("Id", "Level", "Source","Port","Dir","Destination","Port","Hostname","Tags","Data"))
+        self.initUI(("Id", "Level", "Module", "Source","Port","Dir","Destination","Port","Hostname","Tags","Data"))
         
     def initUI(self, headers):
         self.setColumnCount(len(headers))
@@ -277,7 +277,6 @@ class TCPProxyPaneData(QTableWidget):
     def setData(self, index, data, id):
         if "level" not in data:
             data["level"] = "DEBUG"
-            
         ifield=0
         for field in self.fields:
             if field == "id":
