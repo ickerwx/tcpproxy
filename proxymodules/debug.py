@@ -22,7 +22,7 @@ class Module(BaseModuleRedis):
         self.channel_name = "debug:"+self.channel_name
 
     def execute(self, data):
-        self.redis_db.publish(self.channel_name, self.conn.get_json(data, c2s=self.incoming, s2c=not self.incoming))
+        self.redis_db.publish(self.channel_name, self.conn.get_json(data, c2s=self.incoming, s2c=not self.incoming, module="debug"))
         return data
 
     def help(self):
