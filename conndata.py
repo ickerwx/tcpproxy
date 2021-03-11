@@ -79,6 +79,9 @@ class ConnData:
     def get_string(self):
         return "%s:%s %s:%s" % (self.src,  self.srcport,  self.dst,  self.dstport)
 
+    def get_raw_channel(self):
+        return ":".join([self.src,str(self.srcport),self.dst,str(self.dstport)])
+
     def get_channel(self):
         return ":".join([self.src,str(self.srcport),self.dst,str(self.dstport),self.hostname if self.hostname else "undefined", ','.join(self.tags)])
 
