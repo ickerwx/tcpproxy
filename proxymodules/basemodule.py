@@ -49,20 +49,23 @@ class BaseModule:
     def peek(self, data):
         return {}
 
+    def _log_extra(self):
+        return {'conn':self.conn, 'direction':self.direction,  'self':self}
+
     def log_error(self, msg):
-        logger.error(msg, extra={'conn':self.conn, "direction":self.direction})
+        logger.error(msg, extra=self._log_extra())
 
     def log_warning(self, msg):
-        logger.warning(msg, extra={'conn':self.conn, "direction":self.direction})
+        logger.warning(msg, extra=self._log_extra())
 
     def log_info(self, msg):
-        logger.info(msg, extra={'conn':self.conn, "direction":self.direction})
+        logger.info(msg, extra=self._log_extra())
 
     def log_debug(self, msg):
-        logger.debug(msg, extra={'conn':self.conn, "direction":self.direction})
+        logger.debug(msg, extra=self._log_extra())
 
     def log_trace(self, msg):
-        logger.log(2,  msg, extra={'conn':self.conn, "direction":self.direction})
+        logger.log(2,  msg,  extra=self._log_extra())
 
     def is_inhibited(self):
         if len(self.dependencies) > 0:

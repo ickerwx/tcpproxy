@@ -16,7 +16,7 @@ import re
 from protocol_tcp import ProtocolTCP
 from protocol_socks import ProtocolSOCKS
 
-FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(module)-15s %(conn_str)s %(message)s')
+FORMAT = ('%(asctime)-15s %(threadName)-15s %(levelname)-8s %(calling_module)-15s %(conn_str)s %(message)s')
 logging.basicConfig(format=FORMAT)
 
 loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG}
@@ -25,6 +25,7 @@ loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': lo
 # Plugins can also use this object to exchange connection or status information.
 from conndata import ConnData
 
+import inspect
 class ConnectionLogAdapter(logging.LoggerAdapter):
 
     def __init__(self, logger, extra={}):
@@ -38,14 +39,17 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                 kwargs['extra']['conn_str'] = kwargs['extra']['conn'].get_string()
 
                 if 'direction' in kwargs['extra'] and kwargs['extra']['direction']!=None:
-                    #print(kwargs['extra']['direction'])
                     if kwargs['extra']['direction'].lower() in [">",  "client",  "in",  "incoming"]:
                         kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  ">")
                     elif kwargs['extra']['direction'].lower() in ["<",  "server",  "out",  "outgoing"]:
                         kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  "<")
 
+            if 'self' in kwargs['extra']:
+                kwargs['extra'] ['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
+
         if 'extra' not in kwargs:
             kwargs['extra'] = {}
+
         if 'conn' not in kwargs['extra'] or not kwargs['extra'] ['conn']:
             kwargs['extra']['conn'] = self.conn_none
             kwargs['extra'].update(self.conn_none.get_dict())
@@ -56,6 +60,10 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                 'dstport':None,
                 'conn_str': None,
             })
+
+        # Ugly hack to to find caller module name
+        if 'calling_module' not in kwargs['extra']:
+            kwargs['extra']['calling_module'] = inspect.currentframe().f_back.f_back.f_back.f_globals['__name__']
         return msg,  kwargs
 
 logger_raw = logging.getLogger(__name__)
