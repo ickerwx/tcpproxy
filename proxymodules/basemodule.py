@@ -65,7 +65,7 @@ class BaseModule:
         logger.debug(msg, extra=self._log_extra())
 
     def log_trace(self, msg):
-        logger.log(2,  msg,  extra=self._log_extra())
+        logger.trace(msg)
 
     def is_inhibited(self):
         if len(self.dependencies) > 0:
