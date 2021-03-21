@@ -12,7 +12,7 @@ if 'java' in platform.system().lower():
 
 
 class Module:
-    def __init__(self, incoming=False, verbose=False, options=None):
+    def __init__(self, incoming=False, args=None, options=None):
         self.is_jython = 'java' in platform.system().lower()
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]

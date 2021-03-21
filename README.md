@@ -9,37 +9,25 @@ This tool is inspired by and partially based on the TCP proxy example used in Ju
 
 ```
 $ ./tcpproxy.py -h
-usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP]
-                   [-lp LISTEN_PORT] [-pi PROXY_IP] [-pp PROXY_PORT]
-                   [-pt {SOCKS4,SOCKS5,HTTP}] [-om OUT_MODULES]
-                   [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list]
-                   [-lo HELP_MODULES] [-s]
+usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP] [-lp LISTEN_PORT] [-om OUT_MODULES]
+                   [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list] [-lo HELP_MODULES] [-r RULES]
 
-Simple TCP proxy for data interception and modification. Select modules to
-handle the intercepted traffic.
+Simple TCP proxy for data interception and modification. Select modules to handle the intercepted traffic.
 
 optional arguments:
   -h, --help            show this help message and exit
   -ti TARGET_IP, --targetip TARGET_IP
-                        remote target IP or host name
+                        remote target IP or host name (none for transparent proxying based on iptable)
   -tp TARGET_PORT, --targetport TARGET_PORT
                         remote target port
   -li LISTEN_IP, --listenip LISTEN_IP
                         IP address/host name to listen for incoming data
   -lp LISTEN_PORT, --listenport LISTEN_PORT
                         port to listen on
-  -pi PROXY_IP, --proxy-ip PROXY_IP
-                        IP address/host name of proxy
-  -pp PROXY_PORT, --proxy-port PROXY_PORT
-                        proxy port
-  -pt {SOCKS4,SOCKS5,HTTP}, --proxy-type {SOCKS4,SOCKS5,HTTP}
-                        proxy type. Options are SOCKS5 (default), SOCKS4, HTTP
   -om OUT_MODULES, --outmodules OUT_MODULES
-                        comma-separated list of modules to modify data before
-                        sending to remote target.
+                        comma-separated list of modules to modify data before sending to remote target.
   -im IN_MODULES, --inmodules IN_MODULES
-                        comma-separated list of modules to modify data
-                        received from the remote target.
+                        comma-separated list of modules to modify data received from the remote target.
   -v, --verbose         More verbose output of status information
   -n, --no-chain        Don't send output from one module to the next one
   -l LOGFILE, --log LOGFILE
@@ -47,32 +35,121 @@ optional arguments:
   --list                list available modules
   -lo HELP_MODULES, --list-options HELP_MODULES
                         Print help of selected module
-  -s, --ssl             detect SSL/TLS as well as STARTTLS, certificate is
-                        mitm.pem
+  -r RULES, --rules RULES
+                        Use a json module ruleset loaded from an URL instead of -im or -om
 ```
 
 You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
 You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
 
+### Transparent proxy
+
+Transparent proxying will be enabled if no targetip / targetport option is provided. In transparent proxying, TCPProxy will lookup the NAT table to identify the actual target IP.
+
+Of course transparent proxying only works if you are using linux NAT features such as (IPTables/NFT...):
+
+`iptables -t nat -A PREROUTING [-d TARGET_IP] -p tcp [--dport TARGET_PORT] --to-port TCPProxy_LISTEN_PORT -j REDIRECT`
+
+You are also responsible of doing a proper setup for NAT Forwarding. For instance if you which to forward all traffic coming from a given IP range to your system:
+
+`iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -j MASQUERADE`
+
+`sysctl net.ipv4.ip_forward=1`
+
+The mitmproxy project provide a great documentation on different possible network setup:
+
+[https://docs.mitmproxy.org/stable/concepts-modes/]
+
+### Client/Server mode
+
+Client Server mode can be achieved by using the different redis based plugins such as `stats`, `debug`, `intercept`.
+
+For example we recommend using `peek_sni` `peek_host` `stats` to get some feedback on traffic going through TCPProxy.
+
+Redis needs to be installed on the TCPProxy system in order for this to work. Just install a redis package and start the redis service.
+
+Eventually, you need to ensure that redis listen to 0.0.0.0 if you want to use the client from a different system.
+
+When you are ready, run TCPProxy with the ruleset URL pointing to your redis instance:
+
+`tcpproxy.py -v --rules redis://localhost`
+
+You can now run the TCPProxy client CLI (CLI has dependencies requirements on python-redis and python-hexdump) or GUI (GUI have additionnal dependencies requirements on PyQT5 and python-difflib)
+
+`tcpproxy_cli.py YourRedisInstanceIP --rules`
+
+`tcpproxy_gui.py YourRedisInstanceIP`
+
 ## Modules
 
 ```
 $ ./tcpproxy.py --list
+debug - Send received data in redis debug PubSub
 digestdowngrade - Find HTTP Digest Authentication and replace it with a Basic Auth
+	realm: use this instead of the default "tcpproxy"
+
 hexdump - Print a hexdump of the received data
+	length: bytes per line (int)
 http_ok - Prepend HTTP response header
+	server: remote source, used in response Server header
+
 http_post - Prepend HTTP header
+	host: remote target, used in request URL and Host header
+	port: remote target port, used in request URL
+
 http_strip - Remove HTTP header from data
 javaxml - Serialization or deserialization of Java objects (needs jython)
+	mode: [serial|deserial] select deserialization (to XML) or serialization (to Java object)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
+	file: name of logfile
+peek_httphost - Retrieve hostname from HTTP Host
+peek_sni-MISSING DEPENDENCY - Missing dependencies for module: scapy
+	Retrieve hostname from TLS/SSL ClientHello SNI
+peek_ssl - Find if connection is based on SSL by seaching for SSL/TLS Client Hello
+proxy-MISSING DEPENDENCY - Missing dependencies for module: proxy host,proxy port,socks
+	Redirect trafic using a HTTP or SOCKS proxy
+	host: the host to proxy trafic through
+	port: the proxy listening port
+	type: the proxy type: HTTP (default), SOCKS4, SOCKS5
+
+redirect - Redirect trafic to another server through a new TCP socket
+	host: the host to redirect trafic to (default to same host than connection)
+	port: the port to redirect trafic to (default to same port than connection)
+	ssl: connect to server using SSL
+
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 replace - Replace text on the fly by using regular expressions in a file or as module parameters
+	search: string or regular expression to search for
+	replace: string the search string should be replaced with
+	file: file containing search:replace pairs, one per line
+	separator: define a custom search:replace separator in the file, e.g. search#replace
+
+	Use at least file or search and replace (or both).
+
 size - Print the size of the data passed to the module
+	verbose: override the global verbosity setting
 size404 - Change HTTP responses of a certain size to 404.
+	size: if a response has this value as content-length, it will become a 404
+	verbose: print a message if a string is replaced
+	custom: path to a file containing a custom response, will replace the received response
+	rewriteall: if set, it will rewrite all responses. Default is to let the first on through	reset: number of seconds after which we will reset the state and will let the next response through.
+sslupgrade - Upgrade connection to SSL automatically if requested by the client (ClientHello)
+	mode: certificate generation mode (newly generated certificates will be cached into redis) : file(default),fake,spoof,cafake,caspoof,ca
+	file: where to load the certificate and key from in static mode (default:mitm.pem)
+	cn: force certificate CN
+	version: use TLS version (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2)
+	show: show selected ciphers and client certificate requests
+	server_version: use TLS version for server (PROTOCOL_SSLv23, PROTOCOL_SSLv2 ...)
+	ignore_servfail: ignore server connection failure
+	nocache: disable caching on redis
+
+stats - Send statistics to redis db
 textdump - Simply print the received data as text
+	find: string that should be highlighted
+	color: ANSI color code. Will be wrapped with \033[ and m, so passing 32;1 will result in \033[32;1m (bright green)
 ```
 
-Tcpproxy.py uses modules to view or modify the intercepted data. To see the possibly easiest implementation of a module, have a look at the textdump.py module in the proxymodules directory:
+Tcpproxy.py uses modules to view or modify the intercepted data. To see the more documentation about implementation of a module, have a look at [API.md]:
 
 ```python
 #!/usr/bin/env python3

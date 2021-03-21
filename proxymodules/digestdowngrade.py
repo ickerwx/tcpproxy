@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import os
 
-
 class Module:
-    def __init__(self, incoming=False, verbose=False, options=None):
+    def __init__(self, incoming=False, args=None, options=None):
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = os.path.splitext(os.path.basename(__file__))[0]
         self.description = 'Find HTTP Digest Authentication and replace it with a Basic Auth'
-        self.verbose = verbose
+
+        self.verbose = False
+        if args != None:
+            self.verbose = args.log_level in ["DEBUG"]
+
         self.realm = 'tcpproxy'
 
         if options is not None:
