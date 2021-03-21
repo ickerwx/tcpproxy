@@ -22,42 +22,17 @@ class ConnData:
     hostname = None
     data = None
 
-    # Retrieve the destination address and port of the connection
-    def setrealdest(self, csock):
-        # SO_ORIGINAL_DST option is set when iptable REDIRECT target are used
-        # and allows retrieving the original socket destination IP and port (if supported)
-        SOCKADDR_MIN = 16
-        try:
-            socket.SO_ORIGINAL_DST
-        except AttributeError:
-            # This is often not defined as valid socket option. Lets force it
-            socket.SO_ORIGINAL_DST = 80
-
-        # Use the Linux specific socket option to query NetFilter
-        try:
-            odestdata = csock.getsockopt(socket.SOL_IP, socket.SO_ORIGINAL_DST, SOCKADDR_MIN)
-        except FileNotFoundError:
-            raise Exception("Cannot initiate connection in transparent proxy mode (get socket destination from Netfilter failed).")
-
-        # Unpack the first 6 bytes, which hold the destination data needed
-        proto, port, a1, a2, a3, a4 = struct.unpack("!HHBBBBxxxxxxxx", odestdata)
-        assert(socket.htons(proto) == socket.AF_INET)
-        address = "%d.%d.%d.%d" % (a1, a2, a3, a4)
-
-        self.dst = address
-        self.dstport = port
-
-    def __init__(self, source=None, destination=None,  dest_socket=None, hostname=None):
+    def __init__(self, source=None, destination=None, hostname=None):
         if source:
             self.src, self.srcport = source
         if destination:
             self.dst, self.dstport = destination
-        if not self.dst:
-            if dest_socket:
-                self.setrealdest(dest_socket)
 
         self.hostname = hostname
         self.tags = set()
+
+    def set_destination(self,  destination):
+        self.dst, self.dstport = destination
 
     def get_dict(self, data=None, **kwargs):
         res = {
