@@ -114,6 +114,12 @@ class Module(BaseModuleRedis):
 
         return self.get_or_gen_x509(hostid, self.mode, pkey, static_cn=self.static_cn)
 
+    # Usage of key or cert caching is subject to race condition
+    # because of the time required to generate a generic key.
+    #
+    # Either we can generate generic keys on startup to limit race conditions
+    # Or we could implement a redis lock on get_or_gen_key and get_or_gen_x509
+    # pyredis implementation has Lock objects
     def get_or_gen_key(self,hostid,allow_generic=True):
 
         hostid += ":key"
@@ -122,7 +128,7 @@ class Module(BaseModuleRedis):
         pemkey = None
         if self.cache:
             pemkey = self.redis_db.get(hostid)
-            if not pemkey and allow_generic:
+            if (not pemkey) and allow_generic:
                 # Trying to retrieve the generic CA key
                 hostid = "generic:key"
                 pemkey = self.redis_db.get(hostid)
@@ -457,6 +463,7 @@ class Module(BaseModuleRedis):
                 self.log_warning("Failed to perform handshake for SSL Client inspection"+str(ex))
                 return
             ca_names = tmp_conn.get_client_ca_list()
+            tmp_conn.close()
         else:
             self.log_trace("No method to retrieve proposed server CAs has been found (requires modified python SSL stack or 'force_list')")
 
