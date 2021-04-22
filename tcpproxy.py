@@ -391,10 +391,13 @@ def peek_data(data, modules, args, incoming, conn_obj):
         if hasattr(m, "peek") and callable(m.peek):
             if not hasattr(m, "is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
                 connection_debug("client" if incoming else "server", "peek %s" % m.name, args, conn_obj)
-                if args.no_chain_modules:
-                    m.peek(data)
-                else:
-                    peeks.update(m.peek(data))
+                try:
+                    if args.no_chain_modules:
+                        m.peek(data)
+                    else:
+                        peeks.update(m.peek(data))
+                except Exception as ex:
+                    connection_warning("client" if incoming else "server", "Peek exception: %s" % (m.name,ex), args, conn_obj, modulename=m.name)
 
     return peeks
 
