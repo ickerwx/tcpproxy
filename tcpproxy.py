@@ -155,7 +155,7 @@ def parse_args():
     parser.add_argument('-t', '--timeout', dest='timeout', default=5,
                         help='Specify server side timeout to get fast failure feedback (seconds)')
 
-    parser.add_argument('--protocol', dest='protocol',  default="TCP", choices=['TCP',  'SOCKS'],
+    parser.add_argument('--protocol', dest='protocol',  default="TCP", choices=['TCP',  'SOCKS5'],
                         help='Specify protocol for listening thread (default TCP)')
 
     return parser.parse_args()
@@ -434,7 +434,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
 
     if args.protocol == "TCP":
         proto = ProtocolTCP(local_socket,  args)
-    elif args.protocol == "SOCKS":
+    elif args.protocol == "SOCKS5":
         proto = ProtocolSOCKS(local_socket,  args)
     else:
         raise Exception("Unsupported protocol %s" % args.protocol)
