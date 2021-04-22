@@ -481,7 +481,8 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                     firstbytes = sock.peek(1024)
                 # Python SSL module typically does not support socket peeking
                 elif isinstance(sock, ssl.SSLSocket):
-                    firstbytes = ""
+                    # Cannot peek from within a SSL socket (not supported by ssl module)
+                    firstbytes = None
                 # Last try by using the MSG_PEEK API
                 else:
                     firstbytes = sock.recv(1024, socket.MSG_PEEK)
@@ -498,12 +499,13 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 connection_failed("local" if proto.is_local(sock) else "remote", "Cannot peek socket: "+err.__str__(), args, conn_obj)
                 return None
 
-            if proto.is_local(sock):
-                peeks = peek_data(firstbytes, out_modules, args, True,  conn_obj)
-            elif proto.is_remote(sock):
-                peeks = peek_data(firstbytes, in_modules, args, False,  conn_obj)
+            if firstbytes != None:
+                if proto.is_local(sock):
+                    peeks = peek_data(firstbytes, out_modules, args, True,  conn_obj)
+                elif proto.is_remote(sock):
+                    peeks = peek_data(firstbytes, in_modules, args, False,  conn_obj)
 
-            connection_debug("client" if proto.is_local(sock) else "server", "Peeks: %s" % str(peeks), args, conn_obj)
+                connection_debug("client" if proto.is_local(sock) else "server", "Peeks: %s" % str(peeks), args, conn_obj)
 
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
