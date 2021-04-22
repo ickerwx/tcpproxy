@@ -5,7 +5,7 @@ from protocol_tcp import ProtocolTCP
 
 class ProtocolSOCKS(ProtocolTCP):
     
-    name = "SOCKS"
+    name = "SOCKS5"
     
     # Code retrieved from pysoxy
     # https://github.com/MisterDaneel/pysoxy/blob/master/pysoxy.py
