@@ -85,7 +85,17 @@ class Module(BaseModuleRedis):
                     self.missing("redis")
 
     def help(self):
-        return '\tmode: certificate generation mode (newly generated certificates will be cached into redis) : file(default),fake,spoof,cafake,caspoof,ca\n' + '\tfile: where to load the certificate and key from in static mode (default:mitm.pem)\n' + '\tcn: force certificate CN\n' + '\tversion: use TLS version (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2)\n' + '\tshow: show selected ciphers and client certificate requests\n' + '\tserver_version: use TLS version for server (PROTOCOL_SSLv23, PROTOCOL_SSLv2 ...)\n' + '\tignore_servfail: ignore server connection failure\n' + '\tnocache: disable caching on redis\n'
+        options = [
+                'mode: certificate generation mode (newly generated certificates will be cached into redis) : file(default),fake,spoof,cafake,caspoof,ca',
+                'file: where to load the certificate and key from in static mode (default:mitm.pem)',
+                'cn: force certificate CN',
+                'version: use TLS version (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2)',
+                'show: show selected ciphers and client certificate requests',
+                'server_version: use TLS version for server (PROTOCOL_SSLv23, PROTOCOL_SSLv2 ...)',
+                'ignore_servfail: ignore server connection failure',
+                'nocache: disable caching on redis',
+                ]
+        return "\n".join(map(lambda x: "\t"+x, options))
 
 
     def is_client_hello(self, firstbytes):
