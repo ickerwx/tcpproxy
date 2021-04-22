@@ -65,7 +65,7 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                     elif kwargs['extra']['direction'].lower() in ["<",  "server",  "out",  "outgoing"]:
                         kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  "<")
 
-            if 'self' in kwargs['extra']:
+            if 'calling_module' not in kwargs['extra'] and 'self' in kwargs['extra']:
                 kwargs['extra']['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
 
         if 'extra' not in kwargs:
@@ -170,10 +170,10 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
             mod.prematch = prematch
             return mod
         else:
-            connection_warning(None, "Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
+            connection_warning(None, "Invalid module %s: cannot load class 'Module'" % name, args, conn_obj, modulename=name)
             return None
     except ImportError as ex:
-        connection_warning(None, "Cannot load module %s: %s" % (name, str(ex)), args, conn_obj)
+        connection_warning(None, "Cannot load module %s: %s" % (name, str(ex)), args, conn_obj, modulename=name)
         return None
         # sys.exit(3)
 
@@ -252,7 +252,7 @@ def parse_module_options(n,  args, conn_obj):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            connection_warning(None, "Argument %s for module %s is not valid" % (op, name), args, conn_obj)
+            connection_warning(None, "Argument %s for module %s is not valid" % (op, name), args, conn_obj, modulename=name)
             # sys.exit(23)
     return name, options
 
@@ -577,36 +577,36 @@ def handle_data_read(sock, data, args, proto, in_modules, out_modules, conn_obj)
     return True
 
 
-def connection_failed(direction, msg, args, conn_obj=None):
+def connection_failed(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         error_msg = 'Failed connection with %s : %s' % (direction,  msg)
     else:
         error_msg = '%s' % (msg)
-    logger.error(error_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.error(error_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_warning(direction, msg, args, conn_obj=None):
+def connection_warning(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         warning_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         warning_msg = '%s' % (msg)
-    logger.warning(warning_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.warning(warning_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_debug(direction, msg, args, conn_obj=None):
+def connection_debug(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         debug_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         debug_msg = '%s' % (msg)
-    logger.debug(debug_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.debug(debug_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_info(direction, msg, args, conn_obj=None):
+def connection_info(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         info_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         info_msg = '%s' % msg
-    logger.info(info_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.info(info_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
 def main():
