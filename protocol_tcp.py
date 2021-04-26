@@ -5,6 +5,8 @@ import errno
 class ProtocolTCP():
     
     name = "TCP"
+    local_ready = False
+    remote_ready = False
 
     def connection_failed(self, direction, msg):
         if self.conn:
@@ -48,8 +50,9 @@ class ProtocolTCP():
     def connect_destination(self):
         try:
             self.remote_socket.connect((self.conn.dst, self.conn.dstport))
+            self.remote_ready = True
             self.connection_info("remote", "Connected to %s:%d" % self.remote_socket.getpeername())
-            return True
+            return self.remote_ready
         except socket.error as serr:
             # Do not shutdown socket there as it will be selected on the reading loop
             if serr.errno == errno.ECONNREFUSED:
@@ -58,14 +61,20 @@ class ProtocolTCP():
                 self.connection_failed("remote","connection timed out")
             else:
                 self.connection_failed("remote","connection error "+serr.__str__())
-        
-        return False
+
+        return self.remote_ready
     
-    def get_sockets(self):
-        return [self.remote_socket, self.in_socket]
+    def get_sockets(self, ready=True):
+        sockets = []
+        if self.remote_ready or not ready:
+            sockets.append(self.remote_socket)
+        if self.local_ready or not ready:
+            sockets.append(self.in_socket)
+        return sockets
 
     def connect_source(self):
-        return True
+        self.local_ready = True
+        return self.local_ready
 
     def is_local(self,  sock):
         #print("is_local",sock == self.in_socket, sock )
@@ -74,11 +83,15 @@ class ProtocolTCP():
     def is_remote(self, sock):
         return sock == self.remote_socket
 
-    def wrap_local(self,  sock):
+    def wrap_local(self,  sock, ready = True):
         self.in_socket = sock
+        if ready:
+            self.local_ready = True
         
-    def wrap_remote(self,  sock):
+    def wrap_remote(self,  sock, ready = True):
         self.remote_socket = sock
+        if ready:
+            self.remote_ready = True
 
     def shutdown_local(self):
         try:

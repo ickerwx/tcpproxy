@@ -158,7 +158,8 @@ class ProtocolSOCKS(ProtocolTCP):
 
     def connect_source(self):
         if self.subnegotiation():
-            return self.request()
+            self.local_ready = self.request()
+            return self.local_ready
             
     def set_connection(self,  conn):
         self.conn = conn
