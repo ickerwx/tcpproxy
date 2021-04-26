@@ -1,23 +1,42 @@
 # tcpproxy.py - An intercepting proxy for TCP data
 
 This tool opens a listening socket, receives data and then runs this data through a chain of proxy modules. After the modules are done, the resulting data is sent to the target server. The response is received and again run through a chain of modules before sending the final data back to the client.
-To intercept the data, you will either have to be the gateway or do some kind of man-in-the-middle attack. Set up iptables so that the PREROUTING chain will modify the destination and send it to the proxy process. The proxy will then send the data on to whatever target was specified.
+
+To intercept the data, you have several options:
+
+* Your tcpproxy system have to be the gateway or do some kind of man-in-the-middle attack;
+* Set up iptables so that the PREROUTING chain will modify the destination and send it to the proxy process;
+* Configure tcpproxy listener as SOCKS and forward traffic through a SOCKS enabled client (experimental).
+
+The data will be forwarded to the server depending on your configuration:
+
+* If you setup a destination ip/port in command line arguments, it will send traffic to the selected IP;
+* If you did not setup a destination ip, it will try to retrieve destinable from linux NAT tables (transparent proxying);
+* If the listener is configured as SOCKS it will retrieve the proper destination from the SOCKS initialisation packets;
+* As an option, several plugins are actively redirecting selected traffic. Check the documentation for these plugins.
 
 This tool is inspired by and partially based on the TCP proxy example used in Justin Seitz' book "Black Hat Python" by no starch press.
+
+The client/server, GUI, and rule based mechanism (all EXPERIMENTAL) are inspired by Mallory - MiTM TCP and UDP Proxy (https://github.com/intrepidusgroup/mallory).
 
 ## Usage
 
 ```
 $ ./tcpproxy.py -h
-usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP] [-lp LISTEN_PORT] [-om OUT_MODULES]
-                   [-im IN_MODULES] [-v] [-n] [-l LOGFILE] [--list] [-lo HELP_MODULES] [-r RULES]
+usage: tcpproxy.py [-h] [-ti TARGET_IP] [-tp TARGET_PORT] [-li LISTEN_IP]
+                   [-lp LISTEN_PORT] [-om OUT_MODULES] [-im IN_MODULES] [-n]
+                   [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL,TRACE}]
+                   [-lc LOG_CONFIG] [--list] [-lo HELP_MODULES] [-r RULES]
+                   [-t TIMEOUT] [--protocol {TCP,SOCKS}]
 
-Simple TCP proxy for data interception and modification. Select modules to handle the intercepted traffic.
+Simple TCP proxy for data interception and modification. Select modules to
+handle the intercepted traffic.
 
 optional arguments:
   -h, --help            show this help message and exit
   -ti TARGET_IP, --targetip TARGET_IP
-                        remote target IP or host name (none for transparent proxying based on iptable)
+                        remote target IP or host name (none for transparent
+                        proxying based on iptable)
   -tp TARGET_PORT, --targetport TARGET_PORT
                         remote target port
   -li LISTEN_IP, --listenip LISTEN_IP
@@ -25,24 +44,35 @@ optional arguments:
   -lp LISTEN_PORT, --listenport LISTEN_PORT
                         port to listen on
   -om OUT_MODULES, --outmodules OUT_MODULES
-                        comma-separated list of modules to modify data before sending to remote target.
+                        comma-separated list of modules to modify data before
+                        sending to remote target.
   -im IN_MODULES, --inmodules IN_MODULES
-                        comma-separated list of modules to modify data received from the remote target.
-  -v, --verbose         More verbose output of status information
+                        comma-separated list of modules to modify data
+                        received from the remote target.
   -n, --no-chain        Don't send output from one module to the next one
-  -l LOGFILE, --log LOGFILE
-                        Log all data to a file before modules are run.
+  -l {DEBUG,INFO,WARNING,ERROR,CRITICAL,TRACE}, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL,TRACE}
+                        Logging level (verbosity)
+  -lc LOG_CONFIG, --log-config LOG_CONFIG
+                        Logging configuration file (mutually exclusive with
+                        -l --loglevel)
   --list                list available modules
   -lo HELP_MODULES, --list-options HELP_MODULES
                         Print help of selected module
   -r RULES, --rules RULES
-                        Use a json module ruleset loaded from an URL instead of -im or -om
+                        Use a json module ruleset loaded from an URL instead
+                        of -im or -om
+  -t TIMEOUT, --timeout TIMEOUT
+                        Specify server side timeout to get fast failure
+                        feedback (seconds)
+  --protocol {TCP,SOCKS}
+                        Specify protocol for listening thread (default TCP)
 ```
 
-You will have to  provide TARGET_IP and TARGET_PORT, the default listening settings are 0.0.0.0:8080. To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
+To make the program actually useful, you will have to decide which modules you want to use on outgoing (client to server) and incoming (server to client) traffic. You can use different modules for each direction. Pass the list of modules as comma-separated list, e.g. -im mod1,mod4,mod2. The data will be passed to the first module, the returned data will be passed to the second module and so on, unless you use the -n/--no/chain switch. In that case, every module will receive the original data.
 You can also pass options to each module: -im mod1:key1=val1,mod4,mod2:key1=val1:key2=val2. To learn which options you can pass to a module use -lo/--list-options like this: -lo mod1,mod2,mod4
+You can also choose to use the rules mechanism to specify modules depending on different criteria.
 
-### Transparent proxy
+## Transparent proxy
 
 Transparent proxying will be enabled if no targetip / targetport option is provided. In transparent proxying, TCPProxy will lookup the NAT table to identify the actual target IP.
 
@@ -60,36 +90,32 @@ The mitmproxy project provide a great documentation on different possible networ
 
 [https://docs.mitmproxy.org/stable/concepts-modes/]
 
-### Client/Server mode
-
-Client Server mode can be achieved by using the different redis based plugins such as `stats`, `debug`, `intercept`.
-
-For example we recommend using `peek_sni` `peek_host` `stats` to get some feedback on traffic going through TCPProxy.
-
-Redis needs to be installed on the TCPProxy system in order for this to work. Just install a redis package and start the redis service.
-
-Eventually, you need to ensure that redis listen to 0.0.0.0 if you want to use the client from a different system.
-
-When you are ready, run TCPProxy with the ruleset URL pointing to your redis instance:
-
-`tcpproxy.py -v --rules redis://localhost`
-
-You can now run the TCPProxy client CLI (CLI has dependencies requirements on python-redis and python-hexdump) or GUI (GUI have additionnal dependencies requirements on PyQT5 and python-difflib)
-
-`tcpproxy_cli.py YourRedisInstanceIP --rules`
-
-`tcpproxy_gui.py YourRedisInstanceIP`
-
 ## Modules
+
+The following command allow listing all available modules.
+
+Modules are running in order. The only exception is when `--no-chain` is specified in command line, in which case only the first module will be executed.
+
+Some module can require parameters, in such case, the parameters are passed along with the module name using the following syntax: `mod1:key1=val1:key2=val2`
+
+Modules can be separated by `,` or using the space character.
+
+Some modules have optional or mandatory python dependencies. If the dependencie is not satistied, the module will not be run and a WARNING will be printed out for each connection that tries to use this module.
 
 ```
 $ ./tcpproxy.py --list
 debug - Send received data in redis debug PubSub
+* - Default module (for L7 filtering ala Snort/Suricata "content")
 digestdowngrade - Find HTTP Digest Authentication and replace it with a Basic Auth
 	realm: use this instead of the default "tcpproxy"
 
+drop - Drop trafic (optionally with a TCP Reset)
+fileopen - Wrap the server with data from a file instead of a proper connection
+	redis: the redis key where the data is stored
+	esc: an escape string to replace ':' characters (default:_)
 hexdump - Print a hexdump of the received data
 	length: bytes per line (int)
+http_fix - Fix Content-Length HTTP response header
 http_ok - Prepend HTTP response header
 	server: remote source, used in response Server header
 
@@ -98,15 +124,22 @@ http_post - Prepend HTTP header
 	port: remote target port, used in request URL
 
 http_strip - Remove HTTP header from data
+inspect - Inspect received data using redis PubSub
 javaxml - Serialization or deserialization of Java objects (needs jython)
 	mode: [serial|deserial] select deserialization (to XML) or serialization (to Java object)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
 	file: name of logfile
+logo - Siemens Logo! module
+modbus-MISSING DEPENDENCY - Missing dependencies for module: pymodbus
+	Modbus TCP module
+	ports: override default TCP port (502), multiple ports comma separated
+mqtt-MISSING DEPENDENCY - Missing dependencies for module: mqtt_codec
+	MQTT module
 peek_httphost - Retrieve hostname from HTTP Host
 peek_sni-MISSING DEPENDENCY - Missing dependencies for module: scapy
 	Retrieve hostname from TLS/SSL ClientHello SNI
 peek_ssl - Find if connection is based on SSL by seaching for SSL/TLS Client Hello
-proxy-MISSING DEPENDENCY - Missing dependencies for module: proxy host,proxy port,socks
+proxy-MISSING DEPENDENCY - Missing dependencies for module: socks,proxy host,proxy port
 	Redirect trafic using a HTTP or SOCKS proxy
 	host: the host to proxy trafic through
 	port: the proxy listening port
@@ -126,6 +159,9 @@ replace - Replace text on the fly by using regular expressions in a file or as m
 
 	Use at least file or search and replace (or both).
 
+reset - Drop trafic with a TCP Reset
+s7comm - Siemens S7 (0x32) module
+	ports: override default TCP port (102), multiple ports comma separated
 size - Print the size of the data passed to the module
 	verbose: override the global verbosity setting
 size404 - Change HTTP responses of a certain size to 404.
@@ -148,6 +184,127 @@ textdump - Simply print the received data as text
 	find: string that should be highlighted
 	color: ANSI color code. Will be wrapped with \033[ and m, so passing 32;1 will result in \033[32;1m (bright green)
 ```
+
+## Logging (DOCUMENTATION IN PROGRESS)
+
+You can enable logging  all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
+
+## Rule mechanism (EXPERIMENTAL)
+
+You can run TCPProxy with a ruleset URL.
+
+The supported URI schemes are `file://` and `redis://`
+
+Currently rules can only be provided as json (CSV support is in progress)
+
+`tcpproxy.py -v --rules redis://localhost` (rules will be retrieved from the key 'rules')
+
+`tcpproxy.py -v --rules file:///tmp/tcpproxy-rules.json`
+
+The json ruleset need to be an ordered array of rules dictionnaries that can have the following fields:
+```
+[
+{
+  "src": ".*",
+  "srcport": "0-65535",
+  "dst": ".*",
+  "dstport: "443",
+  "c2s": True,
+  "s2c": True,
+  "hostname": None,
+  "rules": "peek_sni peek_httphost sslupgrade"
+}
+]
+```
+
+Most fields support python regular expressions.
+
+In order to filter based on hostname, you need to put in first modules allowing to discover the hostname such as `peek_sni` or `peek_httphost`.
+  
+## Client/Server mode (EXPERIMENTAL)
+
+Client Server mode can be achieved by using the different redis based plugins such as `stats`, `debug`, `intercept`.
+
+Redis needs to be installed on the TCPProxy system in order for this to work. Just install a redis package and start the redis service.
+
+Eventually, you need to ensure first that redis listen to 0.0.0.0 if you want to use the client from a different system.
+
+Starts tcpproxy with the rules parameter:
+`$ tcpproxy.py --rules redis://localhost`
+
+As example we recommend using `peek_sni` `peek_host` `stats` first to get some feedback on traffic going through TCPProxy.
+
+You can now run the TCPProxy client CLI (CLI has dependencies requirements on python-redis and python-hexdump) to edit rules or check ongoing traffic:
+
+`$ ./tcpproxy_cli.py 127.0.0.1 -h
+usage: tcpproxy_cli.py [-h] [-c] [-a [ADD]] [-r REPLACE [REPLACE ...]]
+                       [-d DELETE] [-l LEVEL]
+                       host [topic]
+
+positional arguments:
+  host                  The target host running redis
+  topic                 List or do action on topic
+                        [certs,rules,convs,conns,all]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -c, --clear           Clear the topic
+  -a [ADD], --add [ADD]
+                        Add an item
+  -r REPLACE [REPLACE ...], --replace REPLACE [REPLACE ...]
+                        Edit an item (id key value)
+  -d DELETE, --delete DELETE
+                        Delete an item
+  -l LEVEL, --level LEVEL
+                        Debug level
+`
+
+Add a rule interactively using `tcpproxy_cli.py YourRedisInstanceIP rules -a`
+
+The TCPProxy GUI client can also be used (the GUI has additionnal python dependencies requirements on PyQT5 and python-difflib)
+
+`tcpproxy_gui.py YourRedisInstanceIP`
+
+# Uses cases and example usage (DOCUMENTATION IN PROGRESS)
+
+## Deserializing and Serializing Java Objects to XML
+
+**Note: at present this does not work due to changes that made the code not compatible with Jython's `socket` implementation. If Java deserialization is what you are looking for: the last compatible commit is e3290261.**
+
+Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
+
+```
+CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
+```
+If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
+```
+
+                                            +---------+
+                                  +-------> |BurpSuite+-----+
+                                  |         +---------+     |
+                                  |                         V
++------------------+        +--------+--+                   +-----------+              +-----------+
+| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
++------------------+        +-----------+                   +-----------+              +-----------+
+```
+The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialized objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialized into XML, fed to the tool and then serialized before sending the response to the client.
+```
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om javaxml:mode=deserial,http_post -im http_strip,javaxml:mode=serial
+```
+The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
+Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
+```
+$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_ok -om http_strip,javaxml:mode=serial
+```
+This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP response header, then send the data to burp.
+
+Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
+
+If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
+
+Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
+
+# Writing a module (DOCUMENTATION IN PROGRESS)
 
 Tcpproxy.py uses modules to view or modify the intercepted data. To see the more documentation about implementation of a module, have a look at [API.md]:
 
@@ -255,53 +412,13 @@ The above example should give you an idea how to make use of module parameters. 
 
 You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes. To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
 
-## Deserializing and Serializing Java Objects to XML
 
-**Note: at present this does not work due to changes that made the code not compatible with Jython's `socket` implementation. If Java deserialization is what you are looking for: the last compatible commit is e3290261.**
-
-Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
-
-```
-CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
-```
-If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
-```
-
-                                            +---------+
-                                  +-------> |BurpSuite+-----+
-                                  |         +---------+     |
-                                  |                         V
-+------------------+        +--------+--+                   +-----------+              +-----------+
-| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
-+------------------+        +-----------+                   +-----------+              +-----------+
-```
-The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialized objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialized into XML, fed to the tool and then serialized before sending the response to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om javaxml:mode=deserial,http_post -im http_strip,javaxml:mode=serial
-```
-The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
-Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_ok -om http_strip,javaxml:mode=serial
-```
-This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP response header, then send the data to burp.
-
-Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
-
-If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
-
-Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
-
-## Logging
-
-You can write all data that is sent or received by the proxy to a file using the -l/--log <filename> parameter. Data (and some housekeeping info) is written to the log before passing it to the module chains. If you want to log the state of the data during or after the modules are run, you can use the log proxymodule. Using the chain -im http_post,log:file=log.1,http_strip,log would first log the data after the http_post module to the logfile with the name log.1. The second use of the log module at the end of the chain would write the final state of the data to a logfile with the default name in-<timestamp> right before passing it on .
-
-## TODO
+# TODO
 
 - [ ] make the process interactive by implementing some kind of editor module (will probably complicate matters with regard to timeouts, can be done for now by using the burp solution detailed above and modifying data inside burp)
 - [ ] Create and maintain a parallel branch that is compatible with jython but also has most of the new stuff introduced after e3290261
 
-## Contributions
+# Contributions
 
 I want to thank the following people for spending their valuable time and energy on improving this little tool:
 
