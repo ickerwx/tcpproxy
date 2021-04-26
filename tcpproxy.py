@@ -54,11 +54,14 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                     elif kwargs['extra']['direction'].lower() in ["<",  "server",  "out",  "outgoing"]:
                         kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  "<")
 
-            if 'calling_module' not in kwargs['extra'] and 'self' in kwargs['extra']:
-                kwargs['extra']['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
+            if 'calling_module' not in kwargs['extra']:
+                if 'self' in kwargs['extra']:
+                    kwargs['extra']['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
+                else:
+                    kwargs['extra']['calling_module'] = "tcpproxy"
 
         if 'extra' not in kwargs:
-            kwargs['extra'] = {}
+            kwargs['extra'] = {'calling_module': "tcpproxy"}
 
         if 'conn' not in kwargs['extra'] or not kwargs['extra']['conn']:
             kwargs['extra']['conn'] = self.conn_none
@@ -366,7 +369,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
                     else:
                         data = m.execute(data)
                 except Exception as ex:
-                    connection_failed(m.name, ex.__str__(), args, conn_obj)
+                    connection_warning("client" if incoming else "server", "Module exception: %s" % ex, args, conn_obj, modulename=m.name)
                     import traceback
                     traceback.print_exc()
 
@@ -386,8 +389,9 @@ def peek_data(data, modules, args, incoming, conn_obj):
                     else:
                         peeks.update(m.peek(data))
                 except Exception as ex:
-                    connection_warning("client" if incoming else "server", "Peek exception: %s" % (m.name,ex), args, conn_obj, modulename=m.name)
-
+                    connection_warning("client" if incoming else "server", "Peek exception: %s" % ex, args, conn_obj, modulename=m.name)
+                    import traceback
+                    traceback.print_exc()
     return peeks
 
 
@@ -409,7 +413,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
                             sock = [sock[0], wraps["local_socket"], sock[2]]
                         wraps.update(m.wrap(sock))
                 except Exception as ex:
-                    connection_failed(m.name+" wrapping", ex.__str__(), args, conn_obj)
+                    connection_failed("client" if incoming else "server", "Module exception: %s" % ex, args, conn_obj, modulename=m.name)
                     import traceback
                     traceback.print_exc()
 
