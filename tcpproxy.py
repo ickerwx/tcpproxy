@@ -505,7 +505,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
 
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
-            sockets = proto.get_sockets()
+            sockets = proto.get_sockets(ready=False)
             sockets.append(sock)
             if proto.is_local(sock):
                 wraps = wrap_socket(sockets, out_modules, args, True, conn_obj)
