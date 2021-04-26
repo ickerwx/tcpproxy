@@ -25,16 +25,18 @@ class Module(BaseModuleRedis):
             if 'redis' in options.keys():
                 self.filetype = "redis"
                 self.filename = options['redis']
+                for item in self.redis_db.scan_iter("file:*:%s" % self.filename):
+                  self.filename = item.decode("utf8")
             if 'esc' in options.keys():
                 self.filename = self.filename.replace(options['esc'], ":")
             else:
-                self.filename = self.filename.replace("_",":")
+                self.filename = self.filename.replace(".",":")
 
     def help(self):
-        return "\tredis: the redis key where the data is stored\n" + "\tesc: an escape string to replace ':' characters (default:_)"
+        return "\tredis: the redis key where the data is stored\n" + "\tesc: an escape string to replace ':' characters (default:.)"
 
     def wrap(self, sock):
-        if not self.incoming and not self.fileread and filename:
+        if not self.incoming and not self.fileread and self.filename:
             if self.filetype == "redis":
                 self.log_trace("Reading file from redis (%s) in behalf of connection %s:%d" % (self.filename,self.conn.dst, self.conn.dstport))
 
