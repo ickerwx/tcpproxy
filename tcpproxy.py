@@ -347,9 +347,9 @@ def update_module_hosts(modules, conn_obj):
                 m.set_connection(conn_obj)
             else:
                 if hasattr(m, 'source'):
-                    m.source = conn_obj.src
+                    m.source = (conn_obj.src,conn_obj.srcport)
                 if hasattr(m, 'destination'):
-                    m.destination = conn_obj.dst
+                    m.destination = (conn_obj.dst,conn_obj.dstport)
 
 
 def handle_data(data, modules, args, incoming, conn_obj):
