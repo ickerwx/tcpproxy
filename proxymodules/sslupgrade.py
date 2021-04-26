@@ -187,8 +187,7 @@ class Module(BaseModuleRedis):
 
                 # Need to use subjectAltName or some clients such as chrome will generate a NET::ERR_CERT_COMMON_NAME_INVALID error message
                 # Possible Values starts with URI: DNS: IP: dirName: (distinguished name) otherName: RID: (object ID, 1.2.3.4 for the CN)
-                #ext = crypto.X509Extension("subjectAltName", False, str("IP:"+static_cn))
-                ext = crypto.X509Extension(b"subjectAltName", False, b"RID:1.2.3.4")
+                ext = crypto.X509Extension(b"subjectAltName", False, b"DNS:"+static_cn.encode("utf8"))
                 cert.add_extensions([ext])
 
             else:
