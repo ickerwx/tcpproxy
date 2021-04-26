@@ -26,7 +26,6 @@ logging.basicConfig(format=FORMAT)
 LOG_LEVEL_TRACE = 2
 logging.addLevelName(LOG_LEVEL_TRACE,  "TRACE")
 
-
 def trace(self, message, *args, **kwargs):
     if self.isEnabledFor(LOG_LEVEL_TRACE):
         print("TRACE", message)
@@ -34,16 +33,6 @@ def trace(self, message, *args, **kwargs):
 
 logging.Logger.trace = trace
 loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG,  'TRACE': LOG_LEVEL_TRACE}
-
-
-def trace(self, message, *args, **kwargs):
-    if self.isEnabledFor(LOG_LEVEL_TRACE):
-        print("TRACE", message)
-
-
-logging.Logger.trace = trace
-loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG,  'TRACE': LOG_LEVEL_TRACE}
-
 
 class ConnectionLogAdapter(logging.LoggerAdapter):
 
