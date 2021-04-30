@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 import os.path as path
+from proxymodules.basemodule import BaseModule
 
-
-class Module:
+class Module(BaseModule):
     def __init__(self, incoming=False, args=None, options=None):
+        BaseModule.__init__(self, incoming, args, options)
+
         # extract the file name from __file__. __file__ is proxymodules/name.py
         self.name = path.splitext(path.basename(__file__))[0]
+
         self.description = 'Prepend HTTP response header'
         self.server = None
         if options is not None:
@@ -17,7 +20,7 @@ class Module:
 
     def execute(self, data):
         if self.server is None:
-            self.server = bytes(self.source[0], 'ascii')
+            self.server = bytes(self.conn.src, 'ascii')
 
         http = b"HTTP/1.1 200 OK\r\n"
         http += b"Server: %s\r\n" % self.server

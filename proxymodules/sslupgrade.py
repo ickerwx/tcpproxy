@@ -85,7 +85,17 @@ class Module(BaseModuleRedis):
                     self.missing("redis")
 
     def help(self):
-        return '\tmode: certificate generation mode (newly generated certificates will be cached into redis) : file(default),fake,spoof,cafake,caspoof,ca\n' + '\tfile: where to load the certificate and key from in static mode (default:mitm.pem)\n' + '\tcn: force certificate CN\n' + '\tversion: use TLS version (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2)\n' + '\tshow: show selected ciphers and client certificate requests\n' + '\tserver_version: use TLS version for server (PROTOCOL_SSLv23, PROTOCOL_SSLv2 ...)\n' + '\tignore_servfail: ignore server connection failure\n' + '\tnocache: disable caching on redis\n'
+        options = [
+                'mode: certificate generation mode (newly generated certificates will be cached into redis) : file(default),fake,spoof,cafake,caspoof,ca',
+                'file: where to load the certificate and key from in static mode (default:mitm.pem)',
+                'cn: force certificate CN',
+                'version: use TLS version (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2)',
+                'show: show selected ciphers and client certificate requests',
+                'server_version: use TLS version for server (PROTOCOL_SSLv23, PROTOCOL_SSLv2 ...)',
+                'ignore_servfail: ignore server connection failure',
+                'nocache: disable caching on redis',
+                ]
+        return "\n".join(map(lambda x: "\t"+x, options))
 
 
     def is_client_hello(self, firstbytes):
@@ -114,6 +124,12 @@ class Module(BaseModuleRedis):
 
         return self.get_or_gen_x509(hostid, self.mode, pkey, static_cn=self.static_cn)
 
+    # Usage of key or cert caching is subject to race condition
+    # because of the time required to generate a generic key.
+    #
+    # Either we can generate generic keys on startup to limit race conditions
+    # Or we could implement a redis lock on get_or_gen_key and get_or_gen_x509
+    # pyredis implementation has Lock objects
     def get_or_gen_key(self,hostid,allow_generic=True):
 
         hostid += ":key"
@@ -122,7 +138,7 @@ class Module(BaseModuleRedis):
         pemkey = None
         if self.cache:
             pemkey = self.redis_db.get(hostid)
-            if not pemkey and allow_generic:
+            if (not pemkey) and allow_generic:
                 # Trying to retrieve the generic CA key
                 hostid = "generic:key"
                 pemkey = self.redis_db.get(hostid)
@@ -171,8 +187,7 @@ class Module(BaseModuleRedis):
 
                 # Need to use subjectAltName or some clients such as chrome will generate a NET::ERR_CERT_COMMON_NAME_INVALID error message
                 # Possible Values starts with URI: DNS: IP: dirName: (distinguished name) otherName: RID: (object ID, 1.2.3.4 for the CN)
-                #ext = crypto.X509Extension("subjectAltName", False, str("IP:"+static_cn))
-                ext = crypto.X509Extension(b"subjectAltName", False, b"RID:1.2.3.4")
+                ext = crypto.X509Extension(b"subjectAltName", False, b"DNS:"+static_cn.encode("utf8"))
                 cert.add_extensions([ext])
 
             else:
@@ -457,6 +472,7 @@ class Module(BaseModuleRedis):
                 self.log_warning("Failed to perform handshake for SSL Client inspection"+str(ex))
                 return
             ca_names = tmp_conn.get_client_ca_list()
+            tmp_conn.close()
         else:
             self.log_trace("No method to retrieve proposed server CAs has been found (requires modified python SSL stack or 'force_list')")
 

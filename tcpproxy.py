@@ -26,7 +26,6 @@ logging.basicConfig(format=FORMAT)
 LOG_LEVEL_TRACE = 2
 logging.addLevelName(LOG_LEVEL_TRACE,  "TRACE")
 
-
 def trace(self, message, *args, **kwargs):
     if self.isEnabledFor(LOG_LEVEL_TRACE):
         print("TRACE", message)
@@ -34,16 +33,6 @@ def trace(self, message, *args, **kwargs):
 
 logging.Logger.trace = trace
 loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG,  'TRACE': LOG_LEVEL_TRACE}
-
-
-def trace(self, message, *args, **kwargs):
-    if self.isEnabledFor(LOG_LEVEL_TRACE):
-        print("TRACE", message)
-
-
-logging.Logger.trace = trace
-loglevels = {'CRITICAL': logging.CRITICAL, 'ERROR': logging.ERROR, 'WARNING': logging.WARNING, 'INFO': logging.INFO, 'DEBUG': logging.DEBUG,  'TRACE': LOG_LEVEL_TRACE}
-
 
 class ConnectionLogAdapter(logging.LoggerAdapter):
 
@@ -65,11 +54,14 @@ class ConnectionLogAdapter(logging.LoggerAdapter):
                     elif kwargs['extra']['direction'].lower() in ["<",  "server",  "out",  "outgoing"]:
                         kwargs['extra']['conn_str'] = kwargs['extra']['conn_str'].replace(" ",  "<")
 
-            if 'self' in kwargs['extra']:
-                kwargs['extra']['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
+            if 'calling_module' not in kwargs['extra']:
+                if 'self' in kwargs['extra']:
+                    kwargs['extra']['calling_module'] = kwargs['extra']['self'].__class__.__module__.split(".")[-1]
+                else:
+                    kwargs['extra']['calling_module'] = "tcpproxy"
 
         if 'extra' not in kwargs:
-            kwargs['extra'] = {}
+            kwargs['extra'] = {'calling_module': "tcpproxy"}
 
         if 'conn' not in kwargs['extra'] or not kwargs['extra']['conn']:
             kwargs['extra']['conn'] = self.conn_none
@@ -155,7 +147,7 @@ def parse_args():
     parser.add_argument('-t', '--timeout', dest='timeout', default=5,
                         help='Specify server side timeout to get fast failure feedback (seconds)')
 
-    parser.add_argument('--protocol', dest='protocol',  default="TCP", choices=['TCP',  'SOCKS'],
+    parser.add_argument('--protocol', dest='protocol',  default="TCP", choices=['TCP',  'SOCKS5'],
                         help='Specify protocol for listening thread (default TCP)')
 
     return parser.parse_args()
@@ -170,10 +162,10 @@ def load_module(n, args, incoming=False, prematch=None, conn_obj=None):
             mod.prematch = prematch
             return mod
         else:
-            connection_warning(None, "Invalid module %s: cannot load class 'Module'" % name, args, conn_obj)
+            connection_warning(None, "Invalid module %s: cannot load class 'Module'" % name, args, conn_obj, modulename=name)
             return None
     except ImportError as ex:
-        connection_warning(None, "Cannot load module %s: %s" % (name, str(ex)), args, conn_obj)
+        connection_warning(None, "Cannot load module %s: %s" % (name, str(ex)), args, conn_obj, modulename=name)
         return None
         # sys.exit(3)
 
@@ -252,7 +244,7 @@ def parse_module_options(n,  args, conn_obj):
             k, v = op.split('=')
             options[k] = v
         except ValueError:
-            connection_warning(None, "Argument %s for module %s is not valid" % (op, name), args, conn_obj)
+            connection_warning(None, "Argument %s for module %s is not valid" % (op, name), args, conn_obj, modulename=name)
             # sys.exit(23)
     return name, options
 
@@ -358,9 +350,9 @@ def update_module_hosts(modules, conn_obj):
                 m.set_connection(conn_obj)
             else:
                 if hasattr(m, 'source'):
-                    m.source = conn_obj.src
+                    m.source = (conn_obj.src,conn_obj.srcport)
                 if hasattr(m, 'destination'):
-                    m.destination = conn_obj.dst
+                    m.destination = (conn_obj.dst,conn_obj.dstport)
 
 
 def handle_data(data, modules, args, incoming, conn_obj):
@@ -377,7 +369,7 @@ def handle_data(data, modules, args, incoming, conn_obj):
                     else:
                         data = m.execute(data)
                 except Exception as ex:
-                    connection_failed(m.name, ex.__str__(), args, conn_obj)
+                    connection_warning("client" if incoming else "server", "Module exception: %s" % ex, args, conn_obj, modulename=m.name)
                     import traceback
                     traceback.print_exc()
 
@@ -391,11 +383,15 @@ def peek_data(data, modules, args, incoming, conn_obj):
         if hasattr(m, "peek") and callable(m.peek):
             if not hasattr(m, "is_inhibited") or callable(m.is_inhibited) and not m.is_inhibited():
                 connection_debug("client" if incoming else "server", "peek %s" % m.name, args, conn_obj)
-                if args.no_chain_modules:
-                    m.peek(data)
-                else:
-                    peeks.update(m.peek(data))
-
+                try:
+                    if args.no_chain_modules:
+                        m.peek(data)
+                    else:
+                        peeks.update(m.peek(data))
+                except Exception as ex:
+                    connection_warning("client" if incoming else "server", "Peek exception: %s" % ex, args, conn_obj, modulename=m.name)
+                    import traceback
+                    traceback.print_exc()
     return peeks
 
 
@@ -417,7 +413,7 @@ def wrap_socket(sock, modules, args, incoming, conn_obj):
                             sock = [sock[0], wraps["local_socket"], sock[2]]
                         wraps.update(m.wrap(sock))
                 except Exception as ex:
-                    connection_failed(m.name+" wrapping", ex.__str__(), args, conn_obj)
+                    connection_failed("client" if incoming else "server", "Module exception: %s" % ex, args, conn_obj, modulename=m.name)
                     import traceback
                     traceback.print_exc()
 
@@ -431,7 +427,7 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
 
     if args.protocol == "TCP":
         proto = ProtocolTCP(local_socket,  args)
-    elif args.protocol == "SOCKS":
+    elif args.protocol == "SOCKS5":
         proto = ProtocolSOCKS(local_socket,  args)
     else:
         raise Exception("Unsupported protocol %s" % args.protocol)
@@ -481,7 +477,8 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                     firstbytes = sock.peek(1024)
                 # Python SSL module typically does not support socket peeking
                 elif isinstance(sock, ssl.SSLSocket):
-                    firstbytes = ""
+                    # Cannot peek from within a SSL socket (not supported by ssl module)
+                    firstbytes = None
                 # Last try by using the MSG_PEEK API
                 else:
                     firstbytes = sock.recv(1024, socket.MSG_PEEK)
@@ -498,16 +495,17 @@ def start_proxy_thread(trunning,  local_socket, args, in_modules, out_modules):
                 connection_failed("local" if proto.is_local(sock) else "remote", "Cannot peek socket: "+err.__str__(), args, conn_obj)
                 return None
 
-            if proto.is_local(sock):
-                peeks = peek_data(firstbytes, out_modules, args, True,  conn_obj)
-            elif proto.is_remote(sock):
-                peeks = peek_data(firstbytes, in_modules, args, False,  conn_obj)
+            if firstbytes != None:
+                if proto.is_local(sock):
+                    peeks = peek_data(firstbytes, out_modules, args, True,  conn_obj)
+                elif proto.is_remote(sock):
+                    peeks = peek_data(firstbytes, in_modules, args, False,  conn_obj)
 
-            connection_debug("client" if proto.is_local(sock) else "server", "Peeks: %s" % str(peeks), args, conn_obj)
+                connection_debug("client" if proto.is_local(sock) else "server", "Peeks: %s" % str(peeks), args, conn_obj)
 
             # Wrapping comes next
             # We parse read socket but we probably need to wrap remote socket first anyway
-            sockets = proto.get_sockets()
+            sockets = proto.get_sockets(ready=False)
             sockets.append(sock)
             if proto.is_local(sock):
                 wraps = wrap_socket(sockets, out_modules, args, True, conn_obj)
@@ -577,36 +575,36 @@ def handle_data_read(sock, data, args, proto, in_modules, out_modules, conn_obj)
     return True
 
 
-def connection_failed(direction, msg, args, conn_obj=None):
+def connection_failed(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         error_msg = 'Failed connection with %s : %s' % (direction,  msg)
     else:
         error_msg = '%s' % (msg)
-    logger.error(error_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.error(error_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_warning(direction, msg, args, conn_obj=None):
+def connection_warning(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         warning_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         warning_msg = '%s' % (msg)
-    logger.warning(warning_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.warning(warning_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_debug(direction, msg, args, conn_obj=None):
+def connection_debug(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         debug_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         debug_msg = '%s' % (msg)
-    logger.debug(debug_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.debug(debug_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
-def connection_info(direction, msg, args, conn_obj=None):
+def connection_info(direction, msg, args, conn_obj=None, modulename="tcpproxy"):
     if conn_obj:
         info_msg = 'Connection with %s : %s' % (direction,  msg)
     else:
         info_msg = '%s' % msg
-    logger.info(info_msg, extra={'conn': conn_obj, 'direction': direction})
+    logger.info(info_msg, extra={'conn': conn_obj, 'direction': direction, 'calling_module': modulename})
 
 
 def main():

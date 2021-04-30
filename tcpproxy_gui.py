@@ -290,6 +290,8 @@ class TCPProxyPaneData(QTableWidget):
                         rawdata = base64.b64decode(data[field])
                         rawdata = rawdata.split(b"\n")[0]
                         unidata = rawdata.decode("utf-8")
+                        # Only show 100 first characters. We don't want to fillup the GUI
+                        unidata = unidata[0:100]
                 except UnicodeDecodeError as ex:
                     print ("Cannot decode data to unicode:"+ex.__str__())
                 self.setItem(index, ifield, QTableWidgetItem(unidata))
