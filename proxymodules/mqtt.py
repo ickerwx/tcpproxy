@@ -34,7 +34,7 @@ class Module:
                 except ValueError:
                     print(f'port: invalid port {options["port"]}, using default {self.port}')
             if 'topic' in options.keys():
-                self.topic = options['topic']
+                self.topic = options['topic'].strip()
             if 'hex' in options.keys():
                 try:
                     self.hex = bool(strtobool(options['hex']))
@@ -51,8 +51,7 @@ class Module:
 
     def execute(self, data):
         if self.mqtt is not None:
-            if not self.mqtt.is_connected():
-                self.mqtt.reconnect()
+
             if self.hex is True:
                 self.mqtt.publish(self.topic, data.hex())
             else:
