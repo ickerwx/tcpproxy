@@ -43,6 +43,12 @@ def parse_args():
     parser.add_argument('-lp', '--listenport', dest='listen_port', type=int,
                         default=8080, help='port to listen on')
 
+    parser.add_argument('-si', '--sourceip', dest='source_ip',
+                        default='0.0.0.0', help='IP address the other end will see')
+
+    parser.add_argument('-sp', '--sourceport', dest='source_port', type=int,
+                        default=8080, help='source port the other end will see')
+
     parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
                         help='IP address/host name of proxy')
 
@@ -262,6 +268,8 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         remote_socket.set_proxy(proxy_types[args.proxy_type], args.proxy_ip, args.proxy_port)
 
     try:
+        if args.source_ip and args.source_port:
+            remote_socket.bind((args.source_ip, args.source_port))
         remote_socket.connect((args.target_ip, args.target_port))
         vprint('Connected to %s:%d' % remote_socket.getpeername(), args.verbose)
         log(args.logfile, 'Connected to %s:%d' % remote_socket.getpeername())
