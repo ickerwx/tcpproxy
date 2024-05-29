@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import re
 
 
 class Module:
@@ -9,12 +8,11 @@ class Module:
         self.name = os.path.splitext(os.path.basename(__file__))[0]
         self.description = 'Replace hex data on the fly defining search and replace-pairs in a file or as module parameters'
         self.verbose = verbose
-        self.search = None
-        self.replace = None
         self.filename = None
         self.separator = ':'
         self.len = 16
 
+        search = None
         if options is not None:
             if 'search' in options.keys():
                 search = bytes.fromhex(options['search'])
@@ -54,17 +52,18 @@ class Module:
         print("\n".join(result))
 
     def execute(self, data):
-        #self.hexdump(data)
-        print(f"Incoming packet with size {len(data)}:")
+        if self.verbose:
+            print(f"Incoming packet with size {len(data)}:")
         for search, replace in self.pairs:
-            #print(f"{search} -> {replace}")
             if search in data:
-                print("########## data found ###########")
-                print("[Before:]")
-                self.hexdump(data)
+                if self.verbose:
+                    print("########## data found ###########")
+                    print("[Before:]")
+                    self.hexdump(data)
                 data = data.replace(search, replace)
-                print("[After:]")
-                self.hexdump(data)
+                if self.verbose:
+                    print("[After:]")
+                    self.hexdump(data)
         return data
 
     def help(self):
