@@ -44,10 +44,10 @@ def parse_args():
                         default=8080, help='port to listen on')
 
     parser.add_argument('-si', '--sourceip', dest='source_ip',
-                        default='', help='IP address the other end will see')
+                        help='IP address the other end will see')
 
     parser.add_argument('-sp', '--sourceport', dest='source_port', type=int,
-                        default=0, help='source port the other end will see')
+                        help='source port the other end will see')
 
     parser.add_argument('-pi', '--proxy-ip', dest='proxy_ip', default=None,
                         help='IP address/host name of proxy')
