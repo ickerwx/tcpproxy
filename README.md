@@ -73,7 +73,6 @@ hexdump - Print a hexdump of the received data
 http_ok - Prepend HTTP response header
 http_post - Prepend HTTP header
 http_strip - Remove HTTP header from data
-javaxml - Serialization or deserialization of Java objects (needs jython)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 replace - Replace text on the fly by using regular expressions in a file or as module parameters
@@ -188,43 +187,6 @@ The above example should give you an idea how to make use of module parameters. 
 ```
 
 You can see how the first hexdump instance gets a length of 8 bytes per row and the second instance gets a length of 12 bytes. To pass more than one option to a single module, seperate the options with a : character, modname:key1=val1:key2=val2...
-
-## Deserializing and Serializing Java Objects to XML
-
-**Note: at present this does not work due to changes that made the code not compatible with Jython's `socket` implementation. If Java deserialization is what you are looking for: the last compatible commit is e3290261.**
-
-Using the Java xstream libary, it is possible to deserialize intercepted serialised objects if the .jar with class definitions is known to tcpproxy.
-
-```
-CLASSPATH=./lib/* jython tcpproxy.py -ti 127.0.0.1 -tp 12346 -lp 12345 -om javaxml:mode=deserial,textdump
-```
-If you would like to use a 3rd tool like BurpSuite to manipulate the XStream XML structure use this setup:
-```
-
-                                            +---------+
-                                  +-------> |BurpSuite+-----+
-                                  |         +---------+     |
-                                  |                         V
-+------------------+        +--------+--+                   +-----------+              +-----------+
-| Java ThickClient +------> |1. tcpproxy|                   |2. tcpproxy+------------> |Java Server|
-+------------------+        +-----------+                   +-----------+              +-----------+
-```
-The setup works like this: Let's say you want to intercept an manipulate serialized objects between the thick client and the Java server. The idea is to intercept serialized objects, turn them into XML (deserialize them), pipe them into another tool (BurpSuite in this example) where you manipulate the data, then take that data and send it to the server. The server replies with another object which is again deserialized into XML, fed to the tool and then serialized before sending the response to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <burpIP> -tp <burpPort> -lp <ThickClientTargetPort> -om javaxml:mode=deserial,http_post -im http_strip,javaxml:mode=serial
-```
-The call above is for the first tcpproxy instance between the client and Burp (or whatever tool you want to use). The target IP is the IP Burp is using, target port tp is Burp's listening port. For listening IP li and listening port lp you either configure the client or do some ARP spoofing/iptables magic. With -om you prepare the data for burp. Since Burp only consumes HTTP, use the http_post module after the deserializer to prepend an HTTP header. Then manipulate the data within burp. Take care to configure Burp to redirect the data to the second tcpproxy instance's listen IP/listen port and enable invisible proxying.
-Burp's response will be HTTP with an XML body, so in the incoming chain (-im) first strip the header (http_strip), then serialize the XML before the data is sent to the client.
-```
-$ CLASSPATH=./lib/*:/pathTo/jarFiles/* jython27 tcpproxy.py -ti <JavaServerIP> -tp <JavaServerPort> -lp <BurpSuiteTargetPort> -im javaxml:mode=deserial,http_ok -om http_strip,javaxml:mode=serial
-```
-This is the second tcpproxy instance. Burp will send the data there if you correctly configured the request handling in Burp's proxy listener options. Before sending the data to the server in the outgoing chain (-om), first strip the HTTP header, then serialize the XML. The server's response will be handled by the incoming chain (-im), so deserialize it, prepend the HTTP response header, then send the data to burp.
-
-Using this setup, you are able to take advantage of Burp's capabilities, like the repeater or intruder or simply use it for logging purposes. This was originally the idea of jbarg.
-
-If you are doing automated modifications and have no need for interactivity, you can simply take advantage of the (de-)serialization modules by writing a module to work on the deserialized XML structure. Then plug your module into the chain by doing -im java_deserializer,your_module,java_serializer (or -om of course). This way you also only need one tcpproxy instance, of course.
-
-Note that when using jython, the SSL mitm does not seem to work. It looks like a jython bug to me, but I haven't yet done extensive debugging so I can't say for sure.
 
 ## Logging
 
