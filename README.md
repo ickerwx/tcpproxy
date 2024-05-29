@@ -77,6 +77,7 @@ javaxml - Serialization or deserialization of Java objects (needs jython)
 log - Log data in the module chain. Use in addition to general logging (-l/--log).
 removegzip - Replace gzip in the list of accepted encodings in a HTTP request with booo.
 replace - Replace text on the fly by using regular expressions in a file or as module parameters
+hexreplace - Replace hex data in tcp packets
 size - Print the size of the data passed to the module
 size404 - Change HTTP responses of a certain size to 404.
 textdump - Simply print the received data as text
