@@ -268,7 +268,7 @@ def start_proxy_thread(local_socket, args, in_modules, out_modules):
         remote_socket.set_proxy(proxy_types[args.proxy_type], args.proxy_ip, args.proxy_port)
 
     try:
-        if args.source_ip and args.source_port:
+        if args.source_ip or args.source_port:
             remote_socket.bind((args.source_ip, args.source_port))
         remote_socket.connect((args.target_ip, args.target_port))
         vprint('Connected to %s:%d' % remote_socket.getpeername(), args.verbose)
